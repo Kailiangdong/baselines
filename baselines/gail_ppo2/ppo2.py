@@ -4,7 +4,8 @@ import numpy as np
 import os.path as osp
 from baselines import logger
 from collections import deque
-from baselines.common import explained_variance, set_global_seeds
+from baselines.common import Dataset, dataset, explained_variance, fmt_row, zipsame, set_global_seeds
+from baselines.gail_ppo2.utils import flatten_lists, Discriminator
 from baselines.common.policies import build_policy
 try:
     from mpi4py import MPI
@@ -12,16 +13,16 @@ except ImportError:
     MPI = None
 from baselines.ppo2.runner import Runner
 
-
 def constfn(val):
     def f(_):
         return val
     return f
 
-def learn(*, network, env, total_timesteps, eval_env = None, seed=None, nsteps=2048, ent_coef=0.0, lr=3e-4,
+def learn(env, policy_fn, total_timesteps, reward_giver, expert_dataset ,g_step , d_step, mpi_rank_weight = 1, 
+            eval_env = None, seed=None, nsteps=2048, ent_coef=0.0, lr=3e-4,
             vf_coef=0.5,  max_grad_norm=0.5, gamma=0.99, lam=0.95,
             log_interval=10, nminibatches=4, noptepochs=4, cliprange=0.2,
-            save_interval=0, load_path=None, model_fn=None, update_fn=None, init_fn=None, mpi_rank_weight=1, comm=None, **network_kwargs):
+            save_interval=0, load_path=None, model_fn=None, update_fn=None, init_fn=None, comm=None, **network_kwargs):
     '''
     Learn policy using PPO algorithm (https://arxiv.org/abs/1707.06347)
 
@@ -70,6 +71,14 @@ def learn(*, network, env, total_timesteps, eval_env = None, seed=None, nsteps=2
 
     load_path: str                    path to load the model from
 
+    reward_giver                      reward given by discriminator
+
+    d_step                            discriminator training step
+
+    g_step                            generator training step
+
+    dataset                           expert dataset
+
     **network_kwargs:                 keyword arguments to the policy / network builder. See baselines.common/policies.py/build_policy and arguments to a particular type of network
                                       For instance, 'mlp' network architecture has arguments num_hidden and num_layers.
 
@@ -85,7 +94,7 @@ def learn(*, network, env, total_timesteps, eval_env = None, seed=None, nsteps=2
     else: assert callable(cliprange)
     total_timesteps = int(total_timesteps)
 
-    policy = build_policy(env, network, **network_kwargs)
+    policy = build_policy(env, policy_fn, **network_kwargs)
 
     # Get the nb of env
     nenvs = env.num_envs
@@ -111,6 +120,7 @@ def learn(*, network, env, total_timesteps, eval_env = None, seed=None, nsteps=2
     if load_path is not None:
         model.load(load_path)
     # Instantiate the runner object
+    # runner里面就是采样
     runner = Runner(env=env, model=model, nsteps=nsteps, gamma=gamma, lam=lam)
     if eval_env is not None:
         eval_runner = Runner(env = eval_env, model = model, nsteps = nsteps, gamma = gamma, lam= lam)
@@ -125,13 +135,16 @@ def learn(*, network, env, total_timesteps, eval_env = None, seed=None, nsteps=2
     # Start total timer
     tfirststart = time.perf_counter()
 
+    # 总的步数除以每次nbatch
     nupdates = total_timesteps//nbatch
     for update in range(1, nupdates+1):
         assert nbatch % nminibatches == 0
         # Start timer
+        # 每次更新的比例
         tstart = time.perf_counter()
         frac = 1.0 - (update - 1.0) / nupdates
         # Calculate the learning rate
+        # 获得比例对应的学习率和clip值
         lrnow = lr(frac)
         # Calculate the cliprange
         cliprangenow = cliprange(frac)
@@ -139,7 +152,9 @@ def learn(*, network, env, total_timesteps, eval_env = None, seed=None, nsteps=2
         if update % log_interval == 0 and is_mpi_root: logger.info('Stepping environment...')
 
         # Get minibatch
+        # 获得轨迹
         obs, returns, masks, actions, values, neglogpacs, states, epinfos = runner.run() #pylint: disable=E0632
+        # 无视这个eval_env
         if eval_env is not None:
             eval_obs, eval_returns, eval_masks, eval_actions, eval_values, eval_neglogpacs, eval_states, eval_epinfos = eval_runner.run() #pylint: disable=E0632
 

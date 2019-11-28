@@ -171,15 +171,8 @@ def train(env, seed, policy_fn, reward_giver, dataset, alg,
         workerseed = seed + 10000 * MPI.COMM_WORLD.Get_rank()
         set_global_seeds(workerseed)
         env.seed(workerseed)
-        ppo2.learn(env, policy_fn, reward_giver, dataset, rank,
-                            pretrained=pretrained, pretrained_weight=pretrained_weight,
-                            g_step=g_step, d_step=d_step,
-                            timesteps_per_actorbatch=2048,
-                            clip_param=0.2, entcoeff=policy_entcoeff,
-                            optim_epochs=10, optim_stepsize=3e-4, optim_batchsize=64,
-                            gamma=0.99, lam=0.95,
-                            max_timesteps=num_timesteps,
-                            schedule='linear')
+        # 删除ppo2已经自定义好的参数，只添加reward_giver, dataset, g_step=g_step, d_step=d_step
+        ppo2.learn(env, policy_fn, num_timesteps, reward_giver, dataset, g_step, d_step, mpi_rank_weight = rank)
 
 
 def runner(env, policy_func, load_model_path, timesteps_per_batch, number_trajs,
