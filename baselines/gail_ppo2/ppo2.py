@@ -11,7 +11,7 @@ try:
     from mpi4py import MPI
 except ImportError:
     MPI = None
-from baselines.ppo2.runner import Runner
+from baselines.gail_ppo2.runner import Runner
 
 def constfn(val):
     def f(_):
@@ -120,10 +120,10 @@ def learn(env, policy_fn, total_timesteps, reward_giver, expert_dataset ,g_step 
     if load_path is not None:
         model.load(load_path)
     # Instantiate the runner object
-    # runner里面就是采样
-    runner = Runner(env=env, model=model, nsteps=nsteps, gamma=gamma, lam=lam)
+    # runner里面就是采样, n
+    runner = Runner(env=env, model=model, nsteps=nsteps, gamma=gamma, lam=lam, reward_giver = reward_giver)
     if eval_env is not None:
-        eval_runner = Runner(env = eval_env, model = model, nsteps = nsteps, gamma = gamma, lam= lam)
+        eval_runner = Runner(env = eval_env, model = model, nsteps = nsteps, gamma = gamma, lam= lam, reward_giver = reward_giver)
 
     epinfobuf = deque(maxlen=100)
     if eval_env is not None:
@@ -233,6 +233,7 @@ def learn(env, policy_fn, total_timesteps, reward_giver, expert_dataset ,g_step 
     return model
 # Avoid division error when calculate the mean (in our case if epinfo is empty returns np.nan, not return an error)
 def safemean(xs):
+    # 取出平均值
     return np.nan if len(xs) == 0 else np.mean(xs)
 
 

@@ -10,39 +10,48 @@ class Runner(AbstractEnvRunner):
     run():
     - Make a mini batch
     """
-    def __init__(self, *, env, model, nsteps, gamma, lam):
+    def __init__(self, *, env, model, nsteps, gamma, lam, reward_giver):
         super().__init__(env=env, model=model, nsteps=nsteps)
         # Lambda used in GAE (General Advantage Estimation)
         self.lam = lam
         # Discount rate
         self.gamma = gamma
+        self.reward_giver = reward_giver
 
     def run(self):
         # Here, we init the lists that will contain the mb of experiences
-        mb_obs, mb_rewards, mb_actions, mb_values, mb_dones, mb_neglogpacs = [],[],[],[],[],[]
+        mb_obs, mb_true_rewards, mb_rewards, mb_actions, mb_values, mb_dones, mb_neglogpacs = [],[],[],[],[],[],[]
         mb_states = self.states
         epinfos = []
         # For n in range number of steps
         for _ in range(self.nsteps):
             # Given observations, get action value and neglopacs
             # We already have self.obs because Runner superclass run self.obs[:] = env.reset() on init
-            actions, values, self.states, neglogpacs = self.model.step(self.obs, S=self.states, M=self.dones)
+            # 从model获得actions和values
+            actions, values, self.states, neglogpacs = self.model.stepvalues(self.obs, S=self.states, M=self.dones)
             mb_obs.append(self.obs.copy())
             mb_actions.append(actions)
             mb_values.append(values)
             mb_neglogpacs.append(neglogpacs)
             mb_dones.append(self.dones)
 
+            # 这里可能要用self.obs.copy())
+            rewards = self.reward_giver.get_reward(self.obs.copy(), actions)
             # Take actions in env and look the results
             # Infos contains a ton of useful informations
-            self.obs[:], rewards, self.dones, infos = self.env.step(actions)
+            # 利用infos打出reward和obs, action
+            # infos: a sequence of info objects
+            self.obs[:], true_rewards, self.dones, infos = self.env.step(actions)
+            # 环境env step传出来infos 传给 maybeepinfo然后交给epinfos
             for info in infos:
                 maybeepinfo = info.get('episode')
                 if maybeepinfo: epinfos.append(maybeepinfo)
             mb_rewards.append(rewards)
+            mb_true_rewards.append(true_rewards)
         #batch of steps to batch of rollouts
         mb_obs = np.asarray(mb_obs, dtype=self.obs.dtype)
         mb_rewards = np.asarray(mb_rewards, dtype=np.float32)
+        mb_true_rewards = np.asarray(mb_true_rewards, dtype=np.float32)
         mb_actions = np.asarray(mb_actions)
         mb_values = np.asarray(mb_values, dtype=np.float32)
         mb_neglogpacs = np.asarray(mb_neglogpacs, dtype=np.float32)
@@ -53,6 +62,7 @@ class Runner(AbstractEnvRunner):
         mb_returns = np.zeros_like(mb_rewards)
         mb_advs = np.zeros_like(mb_rewards)
         lastgaelam = 0
+        # 下面在计算adv， 和原来的add_vtarg_and_adv差不多
         for t in reversed(range(self.nsteps)):
             if t == self.nsteps - 1:
                 nextnonterminal = 1.0 - self.dones

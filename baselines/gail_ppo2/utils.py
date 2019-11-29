@@ -1,7 +1,8 @@
 import numpy as np
 from mpi4py import MPI
 from baselines.common import dataset
-
+# runner 里面就是 env=env, model=model, nsteps=nsteps, gamma=gamma, lam=lam
+# nsteps就是horizon
 def traj_segment_generator(pi, env, reward_giver, horizon, stochastic):
     t = 0
     ac = env.action_space.sample() # not used, just so we have the datatype
