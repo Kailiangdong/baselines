@@ -16,7 +16,6 @@ from contextlib import contextmanager
 import numpy as np
 import baselines.common.tf_util as U
 from baselines.common import colorize
-from baselines.gail_ppo2.statistics import stats
 
 def constfn(val):
     def f(_):
@@ -320,6 +319,7 @@ def learn(env, policy_fn, total_timesteps, reward_giver, expert_dataset ,g_step 
                 model.save(savepath)
 
         return model
+
          # ------------------ Update D ------------------
         logger.log("Optimizing Discriminator...")
         # 打印reward_giver的loss名称
