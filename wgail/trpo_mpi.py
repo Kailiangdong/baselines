@@ -244,6 +244,7 @@ def learn(env, policy_func, reward_giver, expert_dataset, rank,
             return allmean(compute_fvp(p, *fvpargs)) + cg_damping * p
         # ------------------ Update G ------------------
         logger.log("Optimizing Policy...")
+        tstart_G = time.time()
         for _ in range(g_step):
             with timed("sampling"):
                 seg = seg_gen.__next__()
@@ -312,6 +313,7 @@ def learn(env, policy_func, reward_giver, expert_dataset, rank,
         for (lossname, lossval) in zip(loss_names, meanlosses):
             logger.record_tabular(lossname, lossval)
         logger.record_tabular("ev_tdlam_before", explained_variance(vpredbefore, tdlamret))
+        tend_G = time.time()
         # ------------------ Update D ------------------
         logger.log("Optimizing Discriminator...")
         logger.log(fmt_row(13, reward_giver.loss_name))
@@ -328,7 +330,9 @@ def learn(env, policy_func, reward_giver, expert_dataset, rank,
             d_adam.update(allmean(g), d_stepsize)
             d_losses.append(newlosses)
         logger.log(fmt_row(13, np.mean(d_losses, axis=0)))
-
+        loss_tmp = np.mean(d_losses, axis=0)
+        generator_loss = loss_tmp[0]
+        expert_loss = loss_tmp[1]
         lrlocal = (seg["ep_lens"], seg["ep_rets"], seg["ep_true_rets"])  # local values
         listoflrpairs = MPI.COMM_WORLD.allgather(lrlocal)  # list of tuples
         lens, rews, true_rets = map(flatten_lists, zip(*listoflrpairs))
@@ -336,6 +340,8 @@ def learn(env, policy_func, reward_giver, expert_dataset, rank,
         lenbuffer.extend(lens)
         rewbuffer.extend(rews)
 
+        logger.record_tabular("Generator_loss", generator_loss)
+        logger.record_tabular("Expert_loss", expert_loss)
         logger.record_tabular("EpLenMean", np.mean(lenbuffer))
         logger.record_tabular("EpRewMean", np.mean(rewbuffer))
         logger.record_tabular("EpTrueRewMean", np.mean(true_rewbuffer))
@@ -347,7 +353,7 @@ def learn(env, policy_func, reward_giver, expert_dataset, rank,
         logger.record_tabular("EpisodesSoFar", episodes_so_far)
         logger.record_tabular("TimestepsSoFar", timesteps_so_far)
         logger.record_tabular("TimeElapsed", time.time() - tstart)
-
+        logger.record_tabular("Time for G", tend_G - tstart_G)
         if rank == 0:
             logger.dump_tabular()
 
