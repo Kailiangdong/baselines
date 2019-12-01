@@ -16,6 +16,7 @@ from baselines.common import explained_variance, zipsame, dataset, fmt_row
 from baselines import logger
 from baselines.common import colorize
 from baselines.common.mpi_adam import MpiAdam
+from baselines.common.mpi_rmsprop import MpiRMSProp
 from baselines.common.cg import cg
 from baselines.gail.statistics import stats
 
@@ -149,7 +150,8 @@ def learn(env, policy_func, reward_giver, expert_dataset, rank,
     var_list = [v for v in all_var_list if v.name.startswith("pi/pol") or v.name.startswith("pi/logstd")]
     vf_var_list = [v for v in all_var_list if v.name.startswith("pi/vff")]
     assert len(var_list) == len(vf_var_list) + 1
-    d_adam = MpiAdam(reward_giver.get_trainable_variables())
+    # 这里只改名字
+    d_adam = MpiRMSProp(reward_giver.get_trainable_variables())
     vfadam = MpiAdam(vf_var_list)
 
     get_flat = U.GetFlat(var_list)
