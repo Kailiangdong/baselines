@@ -11,13 +11,13 @@ from tqdm import tqdm
 import numpy as np
 import gym
 
-from baselines.gail import mlp_policy
+from baselines.gail_ppo2 import mlp_policy
 from baselines.common import set_global_seeds, tf_util as U
 from baselines.common.misc_util import boolean_flag
 from baselines import bench
 from baselines import logger
-from baselines.gail.dataset.mujoco_dset import Mujoco_Dset
-from baselines.gail.adversary import TransitionClassifier
+from baselines.gail_ppo2.dataset.mujoco_dset import Mujoco_Dset
+from baselines.gail_ppo2.adversary import TransitionClassifier
 from baselines.common.vec_env.dummy_vec_env import DummyVecEnv
 from baselines.run import build_env
 
@@ -138,12 +138,12 @@ def train(env, seed, policy_fn, reward_giver, dataset, alg,
     pretrained_weight = None
     if pretrained and (BC_max_iter > 0):
         # Pretrain with behavior cloning
-        from baselines.gail import behavior_clone
+        from baselines.gail_ppo2 import behavior_clone
         pretrained_weight = behavior_clone.learn(env, policy_fn, dataset,
                                                  max_iters=BC_max_iter)
 
     if alg == 'trpo':
-        from baselines.gail import trpo_mpi
+        from baselines.gail_ppo2 import trpo_mpi
         # Set up for MPI seed
         rank = MPI.COMM_WORLD.Get_rank()
         if rank != 0:

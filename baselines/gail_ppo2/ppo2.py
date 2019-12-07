@@ -107,7 +107,8 @@ def learn(env, policy_fn, total_timesteps, reward_giver, expert_dataset ,g_step 
     # 根据网络建立policy pi， 这里应该不用变
     policy = build_policy(env, policy_fn, **network_kwargs)
 
-    # Get the nb of env， 获得环境数量
+    # Get the nb of env， 获得环境数量,这就是并行multi processing
+    # 一般情况下就是1
     nenvs = env.num_envs
 
     # Get state_space and action_space， 获得动作和状态的空间
@@ -117,8 +118,10 @@ def learn(env, policy_fn, total_timesteps, reward_giver, expert_dataset ,g_step 
     # Calculate the batch_size， 获得batch size等会儿每个个的batch size传进去的
     # nstep = timesteps per actor per update
     # nbatch 总的batch size
+    # nenvs  = 1 , nbatch  = nsteps
     nbatch = nenvs * nsteps
     # 总共要train的batch数量
+    # nminibatches 每次小训练的次数
     nbatch_train = nbatch // nminibatches
     # 看是不是mpi根程序，假如是mpi但是rank = 2，3，4也不是根程序
     is_mpi_root = (MPI is None or MPI.COMM_WORLD.Get_rank() == 0)
@@ -126,7 +129,7 @@ def learn(env, policy_fn, total_timesteps, reward_giver, expert_dataset ,g_step 
     # Instantiate the model object (that creates act_model and train_model)
     # 初始化model
     if model_fn is None:
-        from baselines.ppo2.model import Model
+        from baselines.gail_ppo2.model import Model
         model_fn = Model
 
     model = model_fn(policy=policy, ob_space=ob_space, ac_space=ac_space, nbatch_act=nenvs, nbatch_train=nbatch_train,
@@ -221,6 +224,7 @@ def learn(env, policy_fn, total_timesteps, reward_giver, expert_dataset ,g_step 
                         mbinds = inds[start:end]
                         # 获得采样值
                         slices = (arr[mbinds] for arr in (obs, returns, masks, actions, values, neglogpacs))
+                        # 返回的是model的 loss值
                         mblossvals.append(model.train(lrnow, cliprangenow, *slices))
             else: # recurrent version
                 assert nenvs % nminibatches == 0
