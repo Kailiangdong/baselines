@@ -11,12 +11,12 @@ from tqdm import tqdm
 import numpy as np
 import gym
 
-from baselines.gail import mlp_policy
+from baselines.wgail import mlp_policy
 from baselines.common import set_global_seeds, tf_util as U
 from baselines.common.misc_util import boolean_flag
 from baselines import bench
 from baselines import logger
-from baselines.gail.dataset.mujoco_dset import Mujoco_Dset
+from baselines.wgail.dataset.mujoco_dset import Mujoco_Dset
 from baselines.gail.adversary import TransitionClassifier
 
 
@@ -125,12 +125,12 @@ def train(env, seed, policy_fn, reward_giver, dataset, algo,
     pretrained_weight = None
     if pretrained and (BC_max_iter > 0):
         # Pretrain with behavior cloning
-        from baselines.gail import behavior_clone
+        from baselines.wgail import behavior_clone
         pretrained_weight = behavior_clone.learn(env, policy_fn, dataset,
                                                  max_iters=BC_max_iter)
 
     if algo == 'trpo':
-        from baselines.gail import trpo_mpi
+        from baselines.wgail import trpo_mpi
         # Set up for MPI seed
         rank = MPI.COMM_WORLD.Get_rank()
         if rank != 0:

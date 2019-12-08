@@ -326,13 +326,18 @@ def learn(env, policy_func, reward_giver, expert_dataset, rank,
             ob_expert, ac_expert = expert_dataset.get_next_batch(len(ob_batch))
             # update running mean/std for reward_giver
             if hasattr(reward_giver, "obs_rms"): reward_giver.obs_rms.update(np.concatenate((ob_batch, ob_expert), 0))
+            # 获得梯度
             *newlosses, g = reward_giver.lossandgrad(ob_batch, ac_batch, ob_expert, ac_expert)
+            # 梯度下降
+            g = [p.assign(tf.clip_by_value(p, -0.01, 0.01)) for p in g]
             d_adam.update(allmean(g), d_stepsize)
             d_losses.append(newlosses)
         logger.log(fmt_row(13, np.mean(d_losses, axis=0)))
+
         loss_tmp = np.mean(d_losses, axis=0)
         generator_loss = loss_tmp[0]
         expert_loss = loss_tmp[1]
+        
         lrlocal = (seg["ep_lens"], seg["ep_rets"], seg["ep_true_rets"])  # local values
         listoflrpairs = MPI.COMM_WORLD.allgather(lrlocal)  # list of tuples
         lens, rews, true_rets = map(flatten_lists, zip(*listoflrpairs))
