@@ -222,6 +222,8 @@ def learn(env, network, total_timesteps, reward_giver, expert_dataset ,g_step , 
                         end = start + nbatch_train
                         mbinds = inds[start:end]
                         # 获得采样值
+                        print("obs ........")
+                        print(obs)
                         slices = (arr[mbinds] for arr in (obs, returns, masks, actions, values, neglogpacs))
                         # 返回的是model的 loss值
                         mblossvals.append(model.train(lrnow, cliprangenow, *slices))
