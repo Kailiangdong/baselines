@@ -18,7 +18,6 @@ from baselines import bench
 from baselines import logger
 from baselines.gail_ppo2.dataset.mujoco_dset import Mujoco_Dset
 from baselines.gail_ppo2.adversary import TransitionClassifier
-from baselines.common.vec_env.dummy_vec_env import DummyVecEnv
 import sys
 import re
 import multiprocessing
@@ -39,6 +38,7 @@ def argsparser():
     parser.add_argument('--env_type', help='type of environment, used when the environment type cannot be automatically determined', type=str,default='mujuco')
     parser.add_argument('--seed', help='RNG seed', type=int, default=0)
     parser.add_argument('--gamestate', help='game state to load (so far only used in retro games)', default=None)
+    parser.add_argument('--network', help='network type (mlp, cnn, lstm, cnn_lstm, conv_only)', default='mlp')
     parser.add_argument('--num_env', help='Number of environment copies being run in parallel. When not specified, set to number of cpus for Atari, and to 1 for Mujoco', default=None, type=int)
     parser.add_argument('--reward_scale', help='Reward scale factor. Default: 1.0', default=1.0, type=float)
     parser.add_argument('--expert_path', type=str, default='data/deterministic.trpo.Hopper.0.00.npz')
@@ -136,16 +136,12 @@ def main(args):
     gym.logger.setLevel(logging.WARN)
     env = build_env(args)
 
-    def policy_fn(name, ob_space, ac_space, reuse=False):
-        return mlp_policy.MlpPolicy(name=name, ob_space=ob_space, ac_space=ac_space,
-                                    reuse=reuse, hid_size=args.policy_hidden_size, num_hid_layers=2)
-
     if args.task == 'train':
         dataset = Mujoco_Dset(expert_path=args.expert_path, traj_limitation=args.traj_limitation)
         reward_giver = TransitionClassifier(env, args.adversary_hidden_size, entcoeff=args.adversary_entcoeff)
         train(env,
               args.seed,
-              policy_fn,
+              args.network,
               reward_giver,
               dataset,
               args.alg,
@@ -160,143 +156,22 @@ def main(args):
               args.BC_max_iter,
               task_name
               )
-    elif args.task == 'evaluate':
-        runner(env,
-               policy_fn,
-               args.load_model_path,
-               timesteps_per_batch=1024,
-               number_trajs=10,
-               stochastic_policy=args.stochastic_policy,
-               save=args.save_sample
-               )
     else:
         raise NotImplementedError
     env.close()
 
 
-def train(env, seed, policy_fn, reward_giver, dataset, alg,
+def train(env, seed, network, reward_giver, dataset, alg,
           g_step, d_step, policy_entcoeff, num_timesteps, save_per_iter,
           checkpoint_dir, log_dir, pretrained, BC_max_iter, task_name=None):
 
-    pretrained_weight = None
-    if pretrained and (BC_max_iter > 0):
-        # Pretrain with behavior cloning
-        from baselines.gail_ppo2 import behavior_clone
-        pretrained_weight = behavior_clone.learn(env, policy_fn, dataset,
-                                                 max_iters=BC_max_iter)
-
-    if alg == 'trpo':
-        from baselines.gail_ppo2 import trpo_mpi
-        # Set up for MPI seed
-        rank = MPI.COMM_WORLD.Get_rank()
-        if rank != 0:
-            logger.set_level(logger.DISABLED)
-        workerseed = seed + 10000 * MPI.COMM_WORLD.Get_rank()
-        set_global_seeds(workerseed)
-        env.seed(workerseed)
-        trpo_mpi.learn(env, policy_fn, reward_giver, dataset, rank,
-                       pretrained=pretrained, pretrained_weight=pretrained_weight,
-                       g_step=g_step, d_step=d_step,
-                       entcoeff=policy_entcoeff,
-                       max_timesteps=num_timesteps,
-                       ckpt_dir=checkpoint_dir, log_dir=log_dir,
-                       save_per_iter=save_per_iter,
-                       timesteps_per_batch=1024,
-                       max_kl=0.01, cg_iters=10, cg_damping=0.1,
-                       gamma=0.995, lam=0.97,
-                       vf_iters=5, vf_stepsize=1e-3,
-                       task_name=task_name)
-    else:
+    if alg == 'ppo2':
         from baselines.gail_ppo2 import ppo2
         rank = MPI.COMM_WORLD.Get_rank()
         if rank != 0:
             logger.set_level(logger.DISABLED)
-        workerseed = seed + 10000 * MPI.COMM_WORLD.Get_rank()
-        set_global_seeds(workerseed)
-        env.seed(workerseed)
         # 删除ppo2已经自定义好的参数，只添加reward_giver, dataset, g_step=g_step, d_step=d_step
-        ppo2.learn(env, 'mlp', num_timesteps, reward_giver, dataset, g_step, d_step, mpi_rank_weight = rank)
-
-
-def runner(env, policy_func, load_model_path, timesteps_per_batch, number_trajs,
-           stochastic_policy, save=False, reuse=False):
-
-    # Setup network
-    # ----------------------------------------
-    ob_space = env.observation_space
-    ac_space = env.action_space
-    pi = policy_func("pi", ob_space, ac_space, reuse=reuse)
-    U.initialize()
-    # Prepare for rollouts
-    # ----------------------------------------
-    U.load_variables(load_model_path)
-
-    obs_list = []
-    acs_list = []
-    len_list = []
-    ret_list = []
-    for _ in tqdm(range(number_trajs)):
-        traj = traj_1_generator(pi, env, timesteps_per_batch, stochastic=stochastic_policy)
-        obs, acs, ep_len, ep_ret = traj['ob'], traj['ac'], traj['ep_len'], traj['ep_ret']
-        obs_list.append(obs)
-        acs_list.append(acs)
-        len_list.append(ep_len)
-        ret_list.append(ep_ret)
-    if stochastic_policy:
-        print('stochastic policy:')
-    else:
-        print('deterministic policy:')
-    if save:
-        filename = load_model_path.split('/')[-1] + '.' + env.spec.id
-        np.savez(filename, obs=np.array(obs_list), acs=np.array(acs_list),
-                 lens=np.array(len_list), rets=np.array(ret_list))
-    avg_len = sum(len_list)/len(len_list)
-    avg_ret = sum(ret_list)/len(ret_list)
-    print("Average length:", avg_len)
-    print("Average return:", avg_ret)
-    return avg_len, avg_ret
-
-
-# Sample one trajectory (until trajectory end)
-def traj_1_generator(pi, env, horizon, stochastic):
-
-    t = 0
-    ac = env.action_space.sample()  # not used, just so we have the datatype
-    new = True  # marks if we're on first timestep of an episode
-
-    ob = env.reset()
-    cur_ep_ret = 0  # return in current episode
-    cur_ep_len = 0  # len of current episode
-
-    # Initialize history arrays
-    obs = []
-    rews = []
-    news = []
-    acs = []
-
-    while True:
-        ac, vpred = pi.act(stochastic, ob)
-        obs.append(ob)
-        news.append(new)
-        acs.append(ac)
-
-        ob, rew, new, _ = env.step(ac)
-        rews.append(rew)
-
-        cur_ep_ret += rew
-        cur_ep_len += 1
-        if new or t >= horizon:
-            break
-        t += 1
-
-    obs = np.array(obs)
-    rews = np.array(rews)
-    news = np.array(news)
-    acs = np.array(acs)
-    traj = {"ob": obs, "rew": rews, "new": news, "ac": acs,
-            "ep_ret": cur_ep_ret, "ep_len": cur_ep_len}
-    return traj
-
+        ppo2.learn(env, network, num_timesteps, reward_giver, dataset, g_step, d_step, mpi_rank_weight = rank)
 
 if __name__ == '__main__':
     args = argsparser()

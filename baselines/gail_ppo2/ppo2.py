@@ -22,7 +22,7 @@ def constfn(val):
         return val
     return f
 
-def learn(env, policy_fn, total_timesteps, reward_giver, expert_dataset ,g_step , d_step, mpi_rank_weight = 1, 
+def learn(env, network, total_timesteps, reward_giver, expert_dataset ,g_step , d_step, mpi_rank_weight = 1, 
             eval_env = None, seed=None, nsteps=2048, ent_coef=0.0, lr=3e-4,
             vf_coef=0.5,  max_grad_norm=0.5, gamma=0.99, lam=0.95,
             log_interval=10, nminibatches=4, noptepochs=4, cliprange=0.2,
@@ -105,7 +105,7 @@ def learn(env, policy_fn, total_timesteps, reward_giver, expert_dataset ,g_step 
     # 把总步数int化
     total_timesteps = int(total_timesteps)
     # 根据网络建立policy pi， 这里应该不用变
-    policy = build_policy(env, policy_fn, **network_kwargs)
+    policy = build_policy(env, network, **network_kwargs)
 
     # Get the nb of env， 获得环境数量,这就是并行multi processing
     # 一般情况下就是1
