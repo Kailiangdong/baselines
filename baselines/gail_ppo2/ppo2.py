@@ -110,7 +110,6 @@ def learn(env, policy_fn, total_timesteps, reward_giver, expert_dataset ,g_step 
     # Get the nb of env， 获得环境数量,这就是并行multi processing
     # 一般情况下就是1
     nenvs = env.num_envs
-
     # Get state_space and action_space， 获得动作和状态的空间
     ob_space = env.observation_space
     ac_space = env.action_space

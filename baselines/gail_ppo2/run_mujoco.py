@@ -19,15 +19,27 @@ from baselines import logger
 from baselines.gail_ppo2.dataset.mujoco_dset import Mujoco_Dset
 from baselines.gail_ppo2.adversary import TransitionClassifier
 from baselines.common.vec_env.dummy_vec_env import DummyVecEnv
-from baselines.run import build_env
+import sys
+import re
+import multiprocessing
+import os.path as osp
+from collections import defaultdict
+import tensorflow as tf
 
+from baselines.common.vec_env import VecFrameStack, VecNormalize, VecEnv
+from baselines.common.vec_env.vec_video_recorder import VecVideoRecorder
+from baselines.common.cmd_util import common_arg_parser, parse_unknown_args, make_vec_env, make_env
+from baselines.common.tf_util import get_session
+from baselines import logger
+from importlib import import_module
 
 def argsparser():
     parser = argparse.ArgumentParser("Tensorflow Implementation of GAIL")
     parser.add_argument('--env', help='environment ID', default='Hopper-v2')
+    parser.add_argument('--env_type', help='type of environment, used when the environment type cannot be automatically determined', type=str,default='mujuco')
     parser.add_argument('--seed', help='RNG seed', type=int, default=0)
-    parser.add_argument('--num_env', help='Number of environment copies being run in parallel. When not specified, set to number of cpus for Atari, and to 1 for Mujoco', default=1, type=int)
-    parser.add_argument('--env_type', help='type of environment, used when the environment type cannot be automatically determined', type=str)
+    parser.add_argument('--gamestate', help='game state to load (so far only used in retro games)', default=None)
+    parser.add_argument('--num_env', help='Number of environment copies being run in parallel. When not specified, set to number of cpus for Atari, and to 1 for Mujoco', default=None, type=int)
     parser.add_argument('--reward_scale', help='Reward scale factor. Default: 1.0', default=1.0, type=float)
     parser.add_argument('--expert_path', type=str, default='data/deterministic.trpo.Hopper.0.00.npz')
     parser.add_argument('--checkpoint_dir', help='the directory to save model', default='checkpoint')
@@ -47,7 +59,7 @@ def argsparser():
     parser.add_argument('--policy_hidden_size', type=int, default=100)
     parser.add_argument('--adversary_hidden_size', type=int, default=100)
     # Algorithms Configuration
-    parser.add_argument('--alg', type=str, choices=['trpo', 'ppo'], default='trpo')
+    parser.add_argument('--alg', type=str, choices=['trpo', 'ppo2'], default='ppo2')
     parser.add_argument('--max_kl', type=float, default=0.01)
     parser.add_argument('--policy_entcoeff', help='entropy coefficiency of policy', type=float, default=0)
     parser.add_argument('--adversary_entcoeff', help='entropy coefficiency of discriminator', type=float, default=1e-3)
@@ -78,6 +90,41 @@ def configure_logger(log_path, **kwargs):
     else:
         logger.configure(**kwargs)
 
+def build_env(args):
+    ncpu = multiprocessing.cpu_count()
+    if sys.platform == 'darwin': ncpu //= 2
+    nenv = args.num_env or ncpu
+    alg = args.alg
+    seed = None
+    env_type = args.env_type
+    env_id = args.env
+    #env_type, env_id = get_env_type(args)
+
+    if env_type in {'atari', 'retro'}:
+        if alg == 'deepq':
+            env = make_env(env_id, env_type, seed=seed, wrapper_kwargs={'frame_stack': True})
+        elif alg == 'trpo_mpi':
+            env = make_env(env_id, env_type, seed=seed)
+        else:
+            frame_stack_size = 4
+            env = make_vec_env(env_id, env_type, nenv, seed, gamestate=args.gamestate, reward_scale=args.reward_scale)
+            env = VecFrameStack(env, frame_stack_size)
+
+    else:
+        config = tf.ConfigProto(allow_soft_placement=True,
+                               intra_op_parallelism_threads=1,
+                               inter_op_parallelism_threads=1)
+        config.gpu_options.allow_growth = True
+        get_session(config=config)
+
+        flatten_dict_observations = alg not in {'her'}
+        env = make_vec_env(env_id, env_type, args.num_env or 1, seed, reward_scale=args.reward_scale, flatten_dict_observations=flatten_dict_observations)
+
+        if env_type == 'mujoco':
+            env = VecNormalize(env, use_tf=True)
+
+    return env
+
 def main(args):
     U.make_session(num_cpu=1).__enter__()
     set_global_seeds(args.seed)
@@ -87,11 +134,7 @@ def main(args):
     args.log_dir = osp.join(args.log_dir, task_name)
     configure_logger(args.log_dir)
     gym.logger.setLevel(logging.WARN)
-
-    env = gym.make(args.env)
-    env = bench.Monitor(env, logger.get_dir() and
-                osp.join(logger.get_dir(), str(MPI.COMM_WORLD.Get_rank())))
-    env.seed(args.seed)
+    env = build_env(args)
 
     def policy_fn(name, ob_space, ac_space, reuse=False):
         return mlp_policy.MlpPolicy(name=name, ob_space=ob_space, ac_space=ac_space,
@@ -172,7 +215,7 @@ def train(env, seed, policy_fn, reward_giver, dataset, alg,
         set_global_seeds(workerseed)
         env.seed(workerseed)
         # 删除ppo2已经自定义好的参数，只添加reward_giver, dataset, g_step=g_step, d_step=d_step
-        ppo2.learn(env, policy_fn, num_timesteps, reward_giver, dataset, g_step, d_step, mpi_rank_weight = rank)
+        ppo2.learn(env, 'mlp', num_timesteps, reward_giver, dataset, g_step, d_step, mpi_rank_weight = rank)
 
 
 def runner(env, policy_func, load_model_path, timesteps_per_batch, number_trajs,

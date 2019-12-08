@@ -56,11 +56,12 @@ def train(args, extra_args):
 
     total_timesteps = int(args.num_timesteps)
     seed = args.seed
-
+    # 获得算法
     learn = get_learn_function(args.alg)
+    # 算法的参数
     alg_kwargs = get_learn_function_defaults(args.alg, env_type)
     alg_kwargs.update(extra_args)
-
+    # 建立环境
     env = build_env(args)
     if args.save_video_interval != 0:
         env = VecVideoRecorder(env, osp.join(logger.get_dir(), "videos"), record_video_trigger=lambda x: x % args.save_video_interval == 0, video_length=args.save_video_length)
@@ -86,6 +87,7 @@ def train(args, extra_args):
 def build_env(args):
     ncpu = multiprocessing.cpu_count()
     if sys.platform == 'darwin': ncpu //= 2
+    # 挑选最小的那个值或者num或者cpu
     nenv = args.num_env or ncpu
     alg = args.alg
     seed = args.seed
@@ -119,6 +121,7 @@ def build_env(args):
 
 
 def get_env_type(args):
+    # 获得环境的标志
     env_id = args.env
 
     if args.env_type is not None:
@@ -144,13 +147,13 @@ def get_env_type(args):
 
     return env_type, env_id
 
-
+# 获得网络结构
 def get_default_network(env_type):
     if env_type in {'atari', 'retro'}:
         return 'cnn'
     else:
         return 'mlp'
-
+#找到对应的算法module
 def get_alg_module(alg, submodule=None):
     submodule = submodule or alg
     try:
@@ -162,7 +165,8 @@ def get_alg_module(alg, submodule=None):
 
     return alg_module
 
-
+# 找到对应的算法
+# 比如ppo2  learn
 def get_learn_function(alg):
     return get_alg_module(alg).learn
 
@@ -214,7 +218,7 @@ def main(args):
         configure_logger(args.log_path, format_strs=[])
 
     model, env = train(args, extra_args)
-
+    # 已经训练好了考虑保存
     if args.save_path is not None and rank == 0:
         save_path = osp.expanduser(args.save_path)
         model.save(save_path)
