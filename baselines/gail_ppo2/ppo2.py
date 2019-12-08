@@ -195,6 +195,20 @@ def learn(env, network, total_timesteps, reward_giver, expert_dataset ,g_step , 
             # Get minibatch
             # 获得轨迹， 并获得奖励加成优势函数带来的return
             obs, returns, masks, actions, values, neglogpacs, states, epinfos = runner.run() #pylint: disable=E0632
+            print('........obs shape .......')
+            print(obs.shape)
+            print('........returns shape .......')
+            print(returns.shape)
+            print('........masks shape .......')
+            print(masks.shape)
+            print('........actions shape .......')
+            print(actions.shape)
+            print('........values shape .......')
+            print(values.shape)
+            print('........neglogpacs shape .......')
+            print(neglogpacs.shape)
+            print('........states shape .......')
+            print(states.shape)
             # 无视这个eval_env
             if eval_env is not None:
                 eval_obs, eval_returns, eval_masks, eval_actions, eval_values, eval_neglogpacs, eval_states, eval_epinfos = eval_runner.run() #pylint: disable=E0632
