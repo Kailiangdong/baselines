@@ -335,7 +335,7 @@ def learn(env, network, total_timesteps, reward_giver, expert_dataset ,g_step , 
                 print('Saving to', savepath)
                 model.save(savepath)
 
-        return model
+        #return model
 
          # ------------------ Update D ------------------
         logger.log("Optimizing Discriminator...")

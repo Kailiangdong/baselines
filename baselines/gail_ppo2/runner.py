@@ -42,6 +42,7 @@ class Runner(AbstractEnvRunner):
             # 利用infos打出reward和obs, action
             # infos: a sequence of info objects
             self.obs[:], true_rewards, self.dones, infos = self.env.step(actions)
+            # rewards打印出来是[[0.928]], true_rewards 是[0.923]
             # 环境env step传出来infos 传给 maybeepinfo然后交给epinfos
             for info in infos:
                 maybeepinfo = info.get('episode')
