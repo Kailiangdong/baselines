@@ -17,7 +17,7 @@ from baselines.common.misc_util import boolean_flag
 from baselines import bench
 from baselines import logger
 from baselines.wgail.dataset.mujoco_dset import Mujoco_Dset
-from baselines.gail.adversary import TransitionClassifier
+from baselines.wgail.adversary import TransitionClassifier
 
 
 def argsparser():

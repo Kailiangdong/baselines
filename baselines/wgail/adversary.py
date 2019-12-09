@@ -57,7 +57,7 @@ class TransitionClassifier(object):
         # reward for gail
         self.reward_op = generator_logits
         var_list = self.get_trainable_variables()
-        # var_list = [p.assign(tf.clip_by_value(p, -0.01, 0.01)) for p in var_list]
+        var_list = [p.assign(tf.clip_by_value(p, -0.01, 0.01)) for p in var_list]
         self.lossandgrad = U.function([self.generator_obs_ph, self.generator_acs_ph, self.expert_obs_ph, self.expert_acs_ph],
                                       self.losses + [U.flatgrad(self.total_loss, var_list)])
 
