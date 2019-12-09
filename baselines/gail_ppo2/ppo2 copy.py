@@ -25,7 +25,7 @@ def constfn(val):
 def learn(env, network, total_timesteps, reward_giver, expert_dataset ,g_step , d_step, mpi_rank_weight = 1, 
             eval_env = None, seed=None, nsteps=2048, ent_coef=0.0, lr=3e-4,
             vf_coef=0.5,  max_grad_norm=0.5, gamma=0.99, lam=0.95,
-            log_interval = 1, nminibatches=4, noptepochs=4, cliprange=0.2,
+            log_interval=10, nminibatches=4, noptepochs=4, cliprange=0.2,
             save_interval=0, load_path=None, model_fn=None, update_fn=None, init_fn=None, comm=None, **network_kwargs):
     '''
     Learn policy using PPO algorithm (https://arxiv.org/abs/1707.06347)
@@ -92,11 +92,11 @@ def learn(env, network, total_timesteps, reward_giver, expert_dataset ,g_step , 
     # 设置全局种子
     set_global_seeds(seed)
     # 设置 lr得function, 为了后面fraction
-
-    # if isinstance(lr, float): lr = constfn(lr)
-    # else: assert callable(lr)
-    # if isinstance(cliprange, float): cliprange = constfn(cliprange)
-    # else: assert callable(cliprange)
+    d_stepsize=lr
+    if isinstance(lr, float): lr = constfn(lr)
+    else: assert callable(lr)
+    if isinstance(cliprange, float): cliprange = constfn(cliprange)
+    else: assert callable(cliprange)
 
     # set mpi
     nworkers = MPI.COMM_WORLD.Get_size()
@@ -150,8 +150,13 @@ def learn(env, network, total_timesteps, reward_giver, expert_dataset ,g_step , 
     # Instantiate the runner object
     # runner里面就是采样
     runner = Runner(env=env, model=model, nsteps=nsteps, gamma=gamma, lam=lam, reward_giver = reward_giver)
+    # 这句话可以无视我们不需要eval_env
+    if eval_env is not None:
+        eval_runner = Runner(env = eval_env, model = model, nsteps = nsteps, gamma = gamma, lam= lam, reward_giver = reward_giver)
     # 建立一个双向链表
     epinfobuf = deque(maxlen=100)
+    if eval_env is not None:
+        eval_epinfobuf = deque(maxlen=100)
 
     if init_fn is not None:
         init_fn()
@@ -171,30 +176,34 @@ def learn(env, network, total_timesteps, reward_giver, expert_dataset ,g_step , 
 
         logger.log("********** Iteration %i ************"%update)
         # ------------------ Update G ------------------
+        logger.log("Optimizing Policy...")
         for _ in range(g_step):
-            logger.log("...Optimizing Policy...")
             # Start timer
             # 每次小更新里面的计时
             tstart = time.perf_counter()
             # 每次更新的比例
-            # frac = 1.0 - (update - 1.0) / nupdates
+            frac = 1.0 - (update - 1.0) / nupdates
             # Calculate the learning rate
-            # # 获得比例对应的学习率和clip值
-            # lrnow = lr(frac)
-            # # Calculate the cliprange
-            # cliprangenow = cliprange(frac)
+            # 获得比例对应的学习率和clip值
+            lrnow = lr(frac)
+            # Calculate the cliprange
+            cliprangenow = cliprange(frac)
             # log_intercal是10也就是说每过10次，然后根程序要log一次日志
             # 也就是说多进程了每次update
-            #if update % log_interval == 0 and is_mpi_root: logger.info('Stepping environment...')
+            if update % log_interval == 0 and is_mpi_root: logger.info('Stepping environment...')
 
             # Get minibatch
             # 获得轨迹， 并获得奖励加成优势函数带来的return
             obs, returns, masks, actions, values, neglogpacs, states, epinfos = runner.run() #pylint: disable=E0632
-
+            # 无视这个eval_env
+            if eval_env is not None:
+                eval_obs, eval_returns, eval_masks, eval_actions, eval_values, eval_neglogpacs, eval_states, eval_epinfos = eval_runner.run() #pylint: disable=E0632
             # log_intercal是10也就是说每过10次，然后根程序要log一次日志, 与环境的交互结束
-            #if update % log_interval == 0 and is_mpi_root: logger.info('Done.')
+            if update % log_interval == 0 and is_mpi_root: logger.info('Done.')
             # 将 环境交互的信息导入到队列里
             epinfobuf.extend(epinfos)
+            if eval_env is not None:
+                eval_epinfobuf.extend(eval_epinfos)
 
             # Here what we're going to do is for each minibatch calculate the loss and append it.
             mblossvals = []
@@ -215,8 +224,22 @@ def learn(env, network, total_timesteps, reward_giver, expert_dataset ,g_step , 
                         # 获得采样值
                         slices = (arr[mbinds] for arr in (obs, returns, masks, actions, values, neglogpacs))
                         # 返回的是model的 loss值
-                        mblossvals.append(model.train(lr, cliprange, *slices))
-            
+                        mblossvals.append(model.train(lrnow, cliprangenow, *slices))
+            else: # recurrent version
+                assert nenvs % nminibatches == 0
+                envsperbatch = nenvs // nminibatches
+                envinds = np.arange(nenvs)
+                flatinds = np.arange(nenvs * nsteps).reshape(nenvs, nsteps)
+                for _ in range(noptepochs):
+                    np.random.shuffle(envinds)
+                    for start in range(0, nenvs, envsperbatch):
+                        end = start + envsperbatch
+                        mbenvinds = envinds[start:end]
+                        mbflatinds = flatinds[mbenvinds].ravel()
+                        slices = (arr[mbflatinds] for arr in (obs, returns, masks, actions, values, neglogpacs))
+                        mbstates = states[mbenvinds]
+                        mblossvals.append(model.train(lrnow, cliprangenow, *slices, mbstates))
+
             # Feedforward --> get losses --> update
             lossvals = np.mean(mblossvals, axis=0)
             # End timer
@@ -224,30 +247,79 @@ def learn(env, network, total_timesteps, reward_giver, expert_dataset ,g_step , 
             # Calculate the fps (frame per second)
             fps = int(nbatch / (tnow - tstart))
 
+            #默认就是none
+            if update_fn is not None:
+                update_fn(update)
             # 每过10次log或者 第一次log
-            # if update % log_interval == 0 or update == 1:
+            if update % log_interval == 0 or update == 1:
                 # Calculates if value function is a good predicator of the returns (ev > 1)
                 # or if it's just worse than predicting nothing (ev =< 0)
                 # 一个评价指标
-            logger.log("...Optimizing done...")
-            
-        ev = explained_variance(values, returns)
-        logger.logkv("misc/serial_timesteps", update*nsteps)
-        logger.logkv("misc/nupdates", update)
-        logger.logkv("misc/total_timesteps", update*nbatch)
-        logger.logkv("fps", fps)
-        logger.logkv("misc/explained_variance", float(ev))
-        logger.logkv('eprewmean', safemean([epinfo['r'] for epinfo in epinfobuf]))
-        logger.logkv('eplenmean', safemean([epinfo['l'] for epinfo in epinfobuf]))
-        
-        logger.logkv('misc/time_elapsed', tnow - tfirststart)
-        # 打印一些loss, loss都是ppo的loss
-        # loss = pg_loss - entropy * ent_coef + vf_loss * vf_coef
-        # Total loss = Policy gradient loss - entropy * entropy coefficient + Value coefficient * value loss
-        for (lossval, lossname) in zip(lossvals, model.loss_names):
-            logger.logkv('loss/' + lossname, lossval)
-        
-        logger.dumpkvs()
+                ev = explained_variance(values, returns)
+                logger.logkv("misc/serial_timesteps", update*nsteps)
+                logger.logkv("misc/nupdates", update)
+                logger.logkv("misc/total_timesteps", update*nbatch)
+                logger.logkv("fps", fps)
+                logger.logkv("misc/explained_variance", float(ev))
+                logger.logkv('eprewmean', safemean([epinfo['r'] for epinfo in epinfobuf]))
+                logger.logkv('eplenmean', safemean([epinfo['l'] for epinfo in epinfobuf]))
+                if eval_env is not None:
+                    logger.logkv('eval_eprewmean', safemean([epinfo['r'] for epinfo in eval_epinfobuf]) )
+                    logger.logkv('eval_eplenmean', safemean([epinfo['l'] for epinfo in eval_epinfobuf]) )
+                logger.logkv('misc/time_elapsed', tnow - tfirststart)
+                # 打印一些loss, loss都是ppo的loss
+                # loss = pg_loss - entropy * ent_coef + vf_loss * vf_coef
+                # Total loss = Policy gradient loss - entropy * entropy coefficient + Value coefficient * value loss
+                for (lossval, lossname) in zip(lossvals, model.loss_names):
+                    logger.logkv('loss/' + lossname, lossval)
+                
+                logger.dumpkvs()
+
+                '''
+                # 这个是本次模型的
+                Stepping environment...
+                Done.
+                --------------------------------------
+                | eplenmean               | 183      |
+                | eprewmean               | 473      |
+                | fps                     | 1.07e+03 |
+                | loss/approxkl           | 0.0275   |
+                | loss/clipfrac           | 0.269    |
+                | loss/policy_entropy     | -3.34    |
+                | loss/policy_loss        | -0.00507 |
+                | loss/value_loss         | 81.1     |
+                | misc/explained_variance | 0.95     |
+                | misc/nupdates           | 9.76e+03 |
+                | misc/serial_timesteps   | 2e+07    |
+                | misc/time_elapsed       | 1.69e+04 |
+                | misc/total_timesteps    | 2e+07    |
+                --------------------------------------
+                '''
+                '''
+                这个是trpo和ppo的
+                ------------------------------
+                | entloss         | 0        |
+                | entropy         | -2.6     |
+                | EpisodesSoFar   | 5.5e+03  |
+                | EpLenMean       | 1e+03    |
+                | EpRewMean       | 548      |
+                | EpThisIter      | 1        |
+                | EpTrueRewMean   | 3.54e+03 |
+                | ev_tdlam_before | 0.0751   |
+                | meankl          | 0.0111   |
+                | optimgain       | 0.0414   |
+                | surrgain        | 0.0414   |
+                | TimeElapsed     | 1.97e+04 |
+                | TimestepsSoFar  | 5e+06    |
+                ------------------------------
+                '''
+            # 保存模型
+            if save_interval and (update % save_interval == 0 or update == 1) and logger.get_dir() and is_mpi_root:
+                checkdir = osp.join(logger.get_dir(), 'checkpoints')
+                os.makedirs(checkdir, exist_ok=True)
+                savepath = osp.join(checkdir, '%.5i'%update)
+                print('Saving to', savepath)
+                model.save(savepath)
 
         #return model
 
@@ -268,7 +340,7 @@ def learn(env, network, total_timesteps, reward_giver, expert_dataset ,g_step , 
             if hasattr(reward_giver, "obs_rms"): reward_giver.obs_rms.update(np.concatenate((ob_batch, ob_expert), 0))
             *newlosses, g = reward_giver.lossandgrad(ob_batch, ac_batch, ob_expert, ac_expert)
             # 更新了discriminator
-            d_adam.update(allmean(g), lr)
+            d_adam.update(allmean(g), d_stepsize)
             d_losses.append(newlosses)
         logger.log(fmt_row(13, np.mean(d_losses, axis=0)))
 # Avoid division error when calculate the mean (in our case if epinfo is empty returns np.nan, not return an error)
