@@ -37,6 +37,7 @@ class Runner(AbstractEnvRunner):
 
             # 这里可能要用self.obs.copy())
             rewards = self.reward_giver.get_reward(self.obs.copy(), actions)
+            rewards = rewards.reshape((1, ))
             # Take actions in env and look the results
             # Infos contains a ton of useful informations
             # 利用infos打出reward和obs, action
