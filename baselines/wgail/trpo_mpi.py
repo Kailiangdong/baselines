@@ -329,8 +329,9 @@ def learn(env, policy_func, reward_giver, expert_dataset, rank,
             # 获得梯度
             *newlosses, g = reward_giver.lossandgrad(ob_batch, ac_batch, ob_expert, ac_expert)
             # 梯度下降
-            g = [p.assign(tf.clip_by_value(p, -0.01, 0.01)) for p in g]
             d_adam.update(allmean(g), d_stepsize)
+            reward_giver.clip()
+            # reward_giver.train()
             d_losses.append(newlosses)
         logger.log(fmt_row(13, np.mean(d_losses, axis=0)))
 

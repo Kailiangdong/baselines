@@ -57,9 +57,14 @@ class TransitionClassifier(object):
         # reward for gail
         self.reward_op = generator_logits
         var_list = self.get_trainable_variables()
-        var_list = [p.assign(tf.clip_by_value(p, -0.01, 0.01)) for p in var_list]
+        # var_list = [p.assign(tf.clip_by_value(p, -0.01, 0.01)) for p in var_list]
         self.lossandgrad = U.function([self.generator_obs_ph, self.generator_acs_ph, self.expert_obs_ph, self.expert_acs_ph],
                                       self.losses + [U.flatgrad(self.total_loss, var_list)])
+
+        #self.train_op = tf.train.RMSPropOptimizer(3e-4).minimize(self.total_loss, var_list=var_list)
+        #self.clip_op = [tf.assign(p, tf.clip_by_value(p, -0.01, 0.01)) for p in var_list]
+        self.clip_D = [p.assign(tf.clip_by_value(p, -0.02, 0.02)) for p in var_list]
+
 
     def build_ph(self):
         self.generator_obs_ph = tf.placeholder(tf.float32, (None, ) + self.observation_shape, name="observations_ph")
@@ -83,6 +88,10 @@ class TransitionClassifier(object):
 
     def get_trainable_variables(self):
         return tf.get_collection(tf.GraphKeys.TRAINABLE_VARIABLES, self.scope)
+
+    def clip(self):
+        sess = tf.get_default_session()
+        sess.run(self.clip_D)
 
     def get_reward(self, obs, acs):
         sess = tf.get_default_session()

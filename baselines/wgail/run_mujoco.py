@@ -67,6 +67,11 @@ def get_task_name(args):
     task_name += ".seed_" + str(args.seed)
     return task_name
 
+def configure_logger(log_path, **kwargs):
+    if log_path is not None:
+        logger.configure(log_path)
+    else:
+        logger.configure(**kwargs)
 
 def main(args):
     U.make_session(num_cpu=1).__enter__()
@@ -79,10 +84,12 @@ def main(args):
     env = bench.Monitor(env, logger.get_dir() and
                         osp.join(logger.get_dir(), "monitor.json"))
     env.seed(args.seed)
-    gym.logger.setLevel(logging.WARN)
+    # set log_dir
     task_name = get_task_name(args)
     args.checkpoint_dir = osp.join(args.checkpoint_dir, task_name)
     args.log_dir = osp.join(args.log_dir, task_name)
+    configure_logger(args.log_dir)
+    gym.logger.setLevel(logging.WARN)
 
     if args.task == 'train':
         dataset = Mujoco_Dset(expert_path=args.expert_path, traj_limitation=args.traj_limitation)
