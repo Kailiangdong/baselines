@@ -327,11 +327,12 @@ def learn(env, policy_func, reward_giver, expert_dataset, rank,
             # update running mean/std for reward_giver
             if hasattr(reward_giver, "obs_rms"): reward_giver.obs_rms.update(np.concatenate((ob_batch, ob_expert), 0))
             # 获得梯度
-            *newlosses, g = reward_giver.lossandgrad(ob_batch, ac_batch, ob_expert, ac_expert)
+            #*newlosses, g = reward_giver.lossandgrad(ob_batch, ac_batch, ob_expert, ac_expert)
             # 梯度下降
-            d_adam.update(allmean(g), d_stepsize)
-            reward_giver.clip()
-            # reward_giver.train()
+            #d_adam.update(allmean(g), d_stepsize)
+            #reward_giver.clip()
+            reward_giver.train(ob_batch, ac_batch, ob_expert, ac_expert)
+            newlosses = reward_giver.return_loss()
             d_losses.append(newlosses)
         logger.log(fmt_row(13, np.mean(d_losses, axis=0)))
 
