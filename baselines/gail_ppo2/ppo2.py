@@ -134,15 +134,6 @@ def learn(env, network, total_timesteps, reward_giver, expert_dataset ,g_step , 
     model = model_fn(policy=policy, ob_space=ob_space, ac_space=ac_space, nbatch_act=nenvs, nbatch_train=nbatch_train,
                     nsteps=nsteps, ent_coef=ent_coef, vf_coef=vf_coef,
                     max_grad_norm=max_grad_norm, comm=comm, mpi_rank_weight=mpi_rank_weight)
-    # set adam optimizer for discriminator
-    d_adam = MpiAdam(reward_giver.get_trainable_variables())
-    def allmean(x):
-        assert isinstance(x, np.ndarray)
-        out = np.empty_like(x)
-        MPI.COMM_WORLD.Allreduce(x, out, op=MPI.SUM)
-        out /= nworkers
-        return out
-    d_adam.sync()
     
     # 这句话可以无视，每次我们都创建model
     if load_path is not None:
@@ -164,6 +155,16 @@ def learn(env, network, total_timesteps, reward_giver, expert_dataset ,g_step , 
     nupdates = total_timesteps//nbatch
     # 更新次数是nupdates, 那我gail应该是以nbatch为一次更新单位，但是不限制nupdates的次数
     # 迭代循环就这样吧
+
+        # set adam optimizer for discriminator
+    d_adam = MpiAdam(reward_giver.get_trainable_variables())
+    def allmean(x):
+        assert isinstance(x, np.ndarray)
+        out = np.empty_like(x)
+        MPI.COMM_WORLD.Allreduce(x, out, op=MPI.SUM)
+        out /= nworkers
+        return out
+    d_adam.sync()
     # update是每次更新的index
     for update in range(1, nupdates+1):
         # 假如他们不整除要报警
@@ -239,7 +240,7 @@ def learn(env, network, total_timesteps, reward_giver, expert_dataset ,g_step , 
         logger.logkv("misc/explained_variance", float(ev))
         logger.logkv('eprewmean', safemean([epinfo['r'] for epinfo in epinfobuf]))
         logger.logkv('eplenmean', safemean([epinfo['l'] for epinfo in epinfobuf]))
-        
+        logger.logkv('epgivenrewmean',safemean([epinfo['fr'] for epinfo in epinfobuf]))
         logger.logkv('misc/time_elapsed', tnow - tfirststart)
         # 打印一些loss, loss都是ppo的loss
         # loss = pg_loss - entropy * ent_coef + vf_loss * vf_coef

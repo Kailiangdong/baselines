@@ -17,7 +17,7 @@ class Runner(AbstractEnvRunner):
         # Discount rate
         self.gamma = gamma
         self.reward_giver = reward_giver
-
+        self.cur_ep_ret = 0
     def run(self):
         # Here, we init the lists that will contain the mb of experiences
         mb_obs, mb_true_rewards, mb_rewards, mb_actions, mb_values, mb_dones, mb_neglogpacs = [],[],[],[],[],[],[]
@@ -34,10 +34,10 @@ class Runner(AbstractEnvRunner):
             mb_values.append(values)
             mb_neglogpacs.append(neglogpacs)
             mb_dones.append(self.dones)
-
             # 这里可能要用self.obs.copy())
             rewards = self.reward_giver.get_reward(self.obs.copy(), actions)
             rewards = rewards.reshape((1, ))
+            self.cur_ep_ret = self.cur_ep_ret + rewards[0]
             # Take actions in env and look the results
             # Infos contains a ton of useful informations
             # 利用infos打出reward和obs, action
@@ -45,9 +45,14 @@ class Runner(AbstractEnvRunner):
             self.obs[:], true_rewards, self.dones, infos = self.env.step(actions)
             # rewards打印出来是[[0.928]], true_rewards 是[0.923]
             # 环境env step传出来infos 传给 maybeepinfo然后交给epinfos
+            # 2048次采样的reward 全放epinfos一个个叠在一起
+
             for info in infos:
                 maybeepinfo = info.get('episode')
-                if maybeepinfo: epinfos.append(maybeepinfo)
+                if maybeepinfo: 
+                    maybeepinfo['fr'] = self.cur_ep_ret
+                    epinfos.append(maybeepinfo)
+                    self.cur_ep_ret = 0
             mb_rewards.append(rewards)
             mb_true_rewards.append(true_rewards)
         #batch of steps to batch of rollouts
