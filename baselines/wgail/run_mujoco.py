@@ -18,7 +18,7 @@ from baselines import bench
 from baselines import logger
 from baselines.wgail.dataset.mujoco_dset import Mujoco_Dset
 from baselines.wgail.adversary import TransitionClassifier
-
+from datetime import datetime
 
 def argsparser():
     parser = argparse.ArgumentParser("Tensorflow Implementation of GAIL")
@@ -62,7 +62,9 @@ def get_task_name(args):
     if args.traj_limitation != np.inf:
         task_name += "transition_limitation_%d." % args.traj_limitation
     task_name += args.env_id.split("-")[0]
-    task_name = task_name + ".g_step_" + str(args.g_step) + ".d_step_" + str(args.d_step) + \
+    now = datetime.now()
+    dt_string = now.strftime("%Y_%m_%d_%H_%M_%S")
+    task_name = task_name + "_" + dt_string + "_" + ".g_step_" + str(args.g_step) + ".d_step_" + str(args.d_step) + \
         ".policy_entcoeff_" + str(args.policy_entcoeff) + ".adversary_entcoeff_" + str(args.adversary_entcoeff)
     task_name += ".seed_" + str(args.seed)
     return task_name

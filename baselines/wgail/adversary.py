@@ -41,8 +41,8 @@ class TransitionClassifier(object):
         #expert_loss = tf.reduce_mean(expert_loss)
 
         # loss of wgail
-        generator_loss = tf.reduce_mean(generator_logits)
-        expert_loss = - tf.reduce_mean(expert_logits)
+        generator_loss = - tf.reduce_mean(generator_logits)
+        expert_loss = tf.reduce_mean(expert_logits)
         # Build entropy loss
         logits = tf.concat([generator_logits, expert_logits], 0)
         entropy = tf.reduce_mean(logit_bernoulli_entropy(logits))
