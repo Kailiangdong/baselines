@@ -117,7 +117,7 @@ def learn(env, network, total_timesteps, reward_giver, expert_dataset ,g_step , 
     # Calculate the batch_size， 获得batch size等会儿每个个的batch size传进去的
     # nstep = timesteps per actor per update
     # nbatch 总的batch size
-    # nenvs  = 1 , nbatch  = nsteps
+    # nenvs  = 8 , nsteps = 2048, nbatch  = 16384
     nbatch = nenvs * nsteps
     # 总共要train的batch数量
     # nminibatches 每次小训练的次数
