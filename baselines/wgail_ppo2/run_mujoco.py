@@ -11,13 +11,13 @@ import time
 import numpy as np
 import gym
 from baselines import logger
-from baselines.gail_ppo2 import mlp_policy
+from baselines.wgail_ppo2 import mlp_policy
 from baselines.common import set_global_seeds, tf_util as U
 from baselines.common.misc_util import boolean_flag
 from baselines import bench
 from baselines import logger
-from baselines.gail_ppo2.dataset.mujoco_dset import Mujoco_Dset
-from baselines.gail_ppo2.adversary import TransitionClassifier
+from baselines.wgail_ppo2.dataset.mujoco_dset import Mujoco_Dset
+from baselines.wgail_ppo2.adversary import TransitionClassifier
 import sys
 import re
 import multiprocessing
@@ -55,8 +55,8 @@ def argsparser():
     #  Mujoco Dataset Configuration
     parser.add_argument('--traj_limitation', type=int, default=-1)
     # Optimization Configuration
-    parser.add_argument('--g_step', help='number of steps to train policy in each epoch', type=int, default=3)
-    parser.add_argument('--d_step', help='number of steps to train discriminator in each epoch', type=int, default=1)
+    parser.add_argument('--g_step', help='number of steps to train policy in each epoch', type=int, default=1)
+    parser.add_argument('--d_step', help='number of steps to train discriminator in each epoch', type=int, default=5)
     # Network Configuration (Using MLP Policy)
     parser.add_argument('--policy_hidden_size', type=int, default=100)
     parser.add_argument('--adversary_hidden_size', type=int, default=100)
@@ -170,7 +170,7 @@ def train(env, seed, network, reward_giver, dataset, alg,
           checkpoint_dir, log_dir, pretrained, BC_max_iter, task_name=None):
 
     if alg == 'ppo2':
-        from baselines.gail_ppo2 import ppo2
+        from baselines.wgail_ppo2 import ppo2
         rank = MPI.COMM_WORLD.Get_rank()
         if rank != 0:
             logger.set_level(logger.DISABLED)

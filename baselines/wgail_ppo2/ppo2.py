@@ -7,11 +7,13 @@ from collections import deque
 from baselines.common import Dataset, dataset, explained_variance, fmt_row, zipsame, set_global_seeds
 from baselines.common.policies import build_policy
 from baselines.common.mpi_adam import MpiAdam
+from baselines.common.mpi_rmsprop import MpiRMSProp
+
 try:
     from mpi4py import MPI
 except ImportError:
     MPI = None
-from baselines.gail_ppo2.runner import Runner
+from baselines.wgail_ppo2.runner import Runner
 from contextlib import contextmanager
 import numpy as np
 import baselines.common.tf_util as U
@@ -128,7 +130,7 @@ def learn(env, network, total_timesteps, reward_giver, expert_dataset ,g_step , 
     # Instantiate the model object (that creates act_model and train_model)
     # 初始化model
     if model_fn is None:
-        from baselines.gail_ppo2.model import Model
+        from baselines.wgail_ppo2.model import Model
         model_fn = Model
 
     model = model_fn(policy=policy, ob_space=ob_space, ac_space=ac_space, nbatch_act=nenvs, nbatch_train=nbatch_train,
@@ -157,7 +159,8 @@ def learn(env, network, total_timesteps, reward_giver, expert_dataset ,g_step , 
     # 迭代循环就这样吧
 
         # set adam optimizer for discriminator
-    d_adam = MpiAdam(reward_giver.get_trainable_variables())
+    #d_adam = MpiAdam(reward_giver.get_trainable_variables())
+    d_adam = MpiRMSProp(reward_giver.get_trainable_variables())
     def allmean(x):
         assert isinstance(x, np.ndarray)
         out = np.empty_like(x)
@@ -270,8 +273,15 @@ def learn(env, network, total_timesteps, reward_giver, expert_dataset ,g_step , 
             *newlosses, g = reward_giver.lossandgrad(ob_batch, ac_batch, ob_expert, ac_expert)
             # 更新了discriminator
             d_adam.update(allmean(g), lr)
+            reward_giver.clip()
             d_losses.append(newlosses)
+
         logger.log(fmt_row(13, np.mean(d_losses, axis=0)))
+        loss_tmp = np.mean(d_losses, axis=0)
+        generator_loss = loss_tmp[0]
+        expert_loss = loss_tmp[1]
+        logger.logkv("Generator_loss", generator_loss)
+        logger.logkv("Expert_loss", expert_loss)
 # Avoid division error when calculate the mean (in our case if epinfo is empty returns np.nan, not return an error)
 def safemean(xs):
     # 取出平均值

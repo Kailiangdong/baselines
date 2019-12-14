@@ -35,10 +35,14 @@ class TransitionClassifier(object):
         # Build regression loss
         # let x = logits, z = targets.
         # z * -log(sigmoid(x)) + (1 - z) * -log(1 - sigmoid(x))
-        generator_loss = tf.nn.sigmoid_cross_entropy_with_logits(logits=generator_logits, labels=tf.zeros_like(generator_logits))
-        generator_loss = tf.reduce_mean(generator_loss)
-        expert_loss = tf.nn.sigmoid_cross_entropy_with_logits(logits=expert_logits, labels=tf.ones_like(expert_logits))
-        expert_loss = tf.reduce_mean(expert_loss)
+        #generator_loss = tf.nn.sigmoid_cross_entropy_with_logits(logits=generator_logits, labels=tf.zeros_like(generator_logits))
+        #generator_loss = tf.reduce_mean(generator_loss)
+        #expert_loss = tf.nn.sigmoid_cross_entropy_with_logits(logits=expert_logits, labels=tf.ones_like(expert_logits))
+        #expert_loss = tf.reduce_mean(expert_loss)
+
+        # loss of wgail
+        generator_loss = - tf.reduce_mean(generator_logits)
+        expert_loss = tf.reduce_mean(expert_logits)
         # Build entropy loss
         logits = tf.concat([generator_logits, expert_logits], 0)
         entropy = tf.reduce_mean(logit_bernoulli_entropy(logits))
@@ -46,12 +50,21 @@ class TransitionClassifier(object):
         # Loss + Accuracy terms
         self.losses = [generator_loss, expert_loss, entropy, entropy_loss, generator_acc, expert_acc]
         self.loss_name = ["generator_loss", "expert_loss", "entropy", "entropy_loss", "generator_acc", "expert_acc"]
-        self.total_loss = generator_loss + expert_loss + entropy_loss
+        #self.total_loss = generator_loss + expert_loss + entropy_loss
+        self.total_loss =  expert_loss + generator_loss + entropy_loss
         # Build Reward for policy
-        self.reward_op = -tf.log(1-tf.nn.sigmoid(generator_logits)+1e-8)
+        #self.reward_op = -tf.log(1-tf.nn.sigmoid(generator_logits)+1e-8)
+        # reward for gail
+        self.reward_op = generator_logits
         var_list = self.get_trainable_variables()
+        # var_list = [p.assign(tf.clip_by_value(p, -0.01, 0.01)) for p in var_list]
         self.lossandgrad = U.function([self.generator_obs_ph, self.generator_acs_ph, self.expert_obs_ph, self.expert_acs_ph],
                                       self.losses + [U.flatgrad(self.total_loss, var_list)])
+
+        #self.train_op = tf.train.RMSPropOptimizer(3e-4).minimize(self.total_loss, var_list=var_list)
+        #self.clip_op = [tf.assign(p, tf.clip_by_value(p, -0.01, 0.01)) for p in var_list]
+        self.clip_D = [p.assign(tf.clip_by_value(p, -0.02, 0.02)) for p in var_list]
+
 
     def build_ph(self):
         self.generator_obs_ph = tf.placeholder(tf.float32, (None, ) + self.observation_shape, name="observations_ph")
@@ -76,6 +89,10 @@ class TransitionClassifier(object):
     def get_trainable_variables(self):
         return tf.get_collection(tf.GraphKeys.TRAINABLE_VARIABLES, self.scope)
 
+    def clip(self):
+        sess = tf.get_default_session()
+        sess.run(self.clip_D)
+
     def get_reward(self, obs, acs):
         sess = tf.get_default_session()
         if len(obs.shape) == 1:
@@ -85,3 +102,5 @@ class TransitionClassifier(object):
         feed_dict = {self.generator_obs_ph: obs, self.generator_acs_ph: acs}
         reward = sess.run(self.reward_op, feed_dict)
         return reward
+        # reward : (1,1) is an np array , [[0.312]]
+        # generator_logits : (1, 1) is numpy array [[-0.584]]
