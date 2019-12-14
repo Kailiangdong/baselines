@@ -1,0 +1,93 @@
+import numpy as np
+from baselines.common.runners import AbstractEnvRunner
+
+class Runner(AbstractEnvRunner):
+    """
+    We use this object to make a mini batch of experiences
+    __init__:
+    - Initialize the runner
+
+    run():
+    - Make a mini batch
+    """
+    def __init__(self, *, env, model, nsteps, gamma, lam, reward_giver):
+        super().__init__(env=env, model=model, nsteps=nsteps)
+        # Lambda used in GAE (General Advantage Estimation)
+        self.lam = lam
+        # Discount rate
+        self.gamma = gamma
+        self.reward_giver = reward_giver
+        self.cur_ep_ret = 0
+    def run(self):
+        # Here, we init the lists that will contain the mb of experiences
+        mb_obs, mb_true_rewards, mb_rewards, mb_actions, mb_values, mb_dones, mb_neglogpacs = [],[],[],[],[],[],[]
+        mb_states = self.states
+        epinfos = []
+        # For n in range number of steps
+        for _ in range(self.nsteps):
+            # Given observations, get action value and neglopacs
+            # We already have self.obs because Runner superclass run self.obs[:] = env.reset() on init
+            # 从model获得actions和values
+            actions, values, self.states, neglogpacs = self.model.step(self.obs, S=self.states, M=self.dones)
+            mb_obs.append(self.obs.copy())
+            mb_actions.append(actions)
+            mb_values.append(values)
+            mb_neglogpacs.append(neglogpacs)
+            mb_dones.append(self.dones)
+            # 这里可能要用self.obs.copy())
+            rewards = self.reward_giver.get_reward(self.obs.copy(), actions)
+            rewards = rewards.reshape((1, ))
+            self.cur_ep_ret = self.cur_ep_ret + rewards[0]
+            # Take actions in env and look the results
+            # Infos contains a ton of useful informations
+            # 利用infos打出reward和obs, action
+            # infos: a sequence of info objects
+            self.obs[:], true_rewards, self.dones, infos = self.env.step(actions)
+            # rewards打印出来是[[0.928]], true_rewards 是[0.923]
+            # 环境env step传出来infos 传给 maybeepinfo然后交给epinfos
+            # 2048次采样的reward 全放epinfos一个个叠在一起
+
+            for info in infos:
+                maybeepinfo = info.get('episode')
+                if maybeepinfo: 
+                    maybeepinfo['fr'] = self.cur_ep_ret
+                    epinfos.append(maybeepinfo)
+                    self.cur_ep_ret = 0
+            mb_rewards.append(rewards)
+            mb_true_rewards.append(true_rewards)
+        #batch of steps to batch of rollouts
+        mb_obs = np.asarray(mb_obs, dtype=self.obs.dtype)
+        mb_rewards = np.asarray(mb_rewards, dtype=np.float32)
+        mb_true_rewards = np.asarray(mb_true_rewards, dtype=np.float32)
+        mb_actions = np.asarray(mb_actions)
+        mb_values = np.asarray(mb_values, dtype=np.float32)
+        mb_neglogpacs = np.asarray(mb_neglogpacs, dtype=np.float32)
+        mb_dones = np.asarray(mb_dones, dtype=np.bool)
+        last_values = self.model.value(self.obs, S=self.states, M=self.dones)
+
+        # discount/bootstrap off value fn
+        mb_returns = np.zeros_like(mb_rewards)
+        mb_advs = np.zeros_like(mb_rewards)
+        lastgaelam = 0
+        # 下面在计算adv， 和原来的add_vtarg_and_adv差不多
+        for t in reversed(range(self.nsteps)):
+            if t == self.nsteps - 1:
+                nextnonterminal = 1.0 - self.dones
+                nextvalues = last_values
+            else:
+                nextnonterminal = 1.0 - mb_dones[t+1]
+                nextvalues = mb_values[t+1]
+            delta = mb_rewards[t] + self.gamma * nextvalues * nextnonterminal - mb_values[t]
+            mb_advs[t] = lastgaelam = delta + self.gamma * self.lam * nextnonterminal * lastgaelam
+        mb_returns = mb_advs + mb_values
+        return (*map(sf01, (mb_obs, mb_returns, mb_dones, mb_actions, mb_values, mb_neglogpacs)),
+            mb_states, epinfos)
+# obs, returns, masks, actions, values, neglogpacs, states = runner.run()
+def sf01(arr):
+    """
+    swap and then flatten axes 0 and 1
+    """
+    s = arr.shape
+    return arr.swapaxes(0, 1).reshape(s[0] * s[1], *s[2:])
+
+

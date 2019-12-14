@@ -77,7 +77,6 @@ def traj_segment_generator(pi, env, reward_giver, horizon, stochastic):
         cur_ep_ret += rew
         cur_ep_true_ret += true_rew
         cur_ep_len += 1
-        # 如果完成了done了，返回new为true，把累计获得奖励加进ep_rets然后清空累计值
         if new:
             ep_rets.append(cur_ep_ret)
             ep_true_rets.append(cur_ep_true_ret)
