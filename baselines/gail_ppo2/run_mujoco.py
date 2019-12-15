@@ -170,12 +170,12 @@ def train(env, seed, network, reward_giver, dataset, alg,
           checkpoint_dir, log_dir, pretrained, BC_max_iter, task_name=None):
 
     if alg == 'ppo2':
-        from baselines.gail_ppo2 import ppo2
+        from baselines.gail_ppo2 import ppo2_mpi
         rank = MPI.COMM_WORLD.Get_rank()
         if rank != 0:
             logger.set_level(logger.DISABLED)
         # 删除ppo2已经自定义好的参数，只添加reward_giver, dataset, g_step=g_step, d_step=d_step
-        ppo2.learn(env, network, num_timesteps, reward_giver, dataset, g_step, d_step, mpi_rank_weight = rank)
+        ppo2_mpi.learn(env, network, num_timesteps, reward_giver, dataset, g_step, d_step, mpi_rank_weight = rank)
 
 if __name__ == '__main__':
     args = argsparser()
