@@ -59,7 +59,7 @@ class TransitionClassifier(object):
         var_list = self.get_trainable_variables()
         # var_list = [p.assign(tf.clip_by_value(p, -0.01, 0.01)) for p in var_list]
         self.lossandgrad = U.function([self.generator_obs_ph, self.generator_acs_ph, self.expert_obs_ph, self.expert_acs_ph],
-        #                               self.losses + [U.flatgrad(self.total_loss, var_list)])
+                                       self.losses + [U.flatgrad(self.total_loss, var_list)])
 
         #self.train_op = tf.train.RMSPropOptimizer(3e-4).minimize(self.total_loss, var_list=var_list)
         #self.clip_op = [tf.assign(p, tf.clip_by_value(p, -0.01, 0.01)) for p in var_list]
@@ -91,18 +91,18 @@ class TransitionClassifier(object):
     def get_trainable_variables(self):
         return tf.get_collection(tf.GraphKeys.TRAINABLE_VARIABLES, self.scope)
 
-    # def clip(self):
-    #     sess = tf.get_default_session()
-    #     sess.run(self.clip_D)
-
-    def train(self, obs, acs, ob_expert, ac_expert):
+    def clip(self):
         sess = tf.get_default_session()
-        if len(obs.shape) == 1:
-            obs = np.expand_dims(obs, 0)
-        if len(acs.shape) == 1:
-            acs = np.expand_dims(acs, 0)
-        feed_dict = {self.generator_obs_ph: obs, self.generator_acs_ph: acs, self.expert_obs_ph:ob_expert,self.expert_acs_ph:ac_expert}
-        sess.run([self.update_op, self.clip_D], feed_dict)
+        sess.run(self.clip_D)
+
+    # def train(self, obs, acs, ob_expert, ac_expert):
+    #     sess = tf.get_default_session()
+    #     if len(obs.shape) == 1:
+    #         obs = np.expand_dims(obs, 0)
+    #     if len(acs.shape) == 1:
+    #         acs = np.expand_dims(acs, 0)
+    #     feed_dict = {self.generator_obs_ph: obs, self.generator_acs_ph: acs, self.expert_obs_ph:ob_expert,self.expert_acs_ph:ac_expert}
+    #     sess.run([self.update_op, self.clip_D], feed_dict)
 
     def get_reward(self, obs, acs):
         sess = tf.get_default_session()
@@ -115,5 +115,5 @@ class TransitionClassifier(object):
         return reward
         # reward : (1,1) is an np array , [[0.312]]
         # generator_logits : (1, 1) is numpy array [[-0.584]]
-    def return_loss(self):
-        return self.losses
+    # def return_loss(self):
+    #     return self.losses
