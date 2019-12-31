@@ -327,12 +327,12 @@ def learn(env, policy_func, reward_giver, expert_dataset, rank,
             # update running mean/std for reward_giver
             if hasattr(reward_giver, "obs_rms"): reward_giver.obs_rms.update(np.concatenate((ob_batch, ob_expert), 0))
             # 获得梯度
-            #*newlosses, g = reward_giver.lossandgrad(ob_batch, ac_batch, ob_expert, ac_expert)
+            *newlosses, g = reward_giver.lossandgrad(ob_batch, ac_batch, ob_expert, ac_expert)
             # 梯度下降
-            #d_adam.update(allmean(g), d_stepsize)
+            d_adam.update(allmean(g), d_stepsize)
             #reward_giver.clip()
-            reward_giver.train(ob_batch, ac_batch, ob_expert, ac_expert)
-            newlosses = reward_giver.return_loss()
+            #reward_giver.train(ob_batch, ac_batch, ob_expert, ac_expert)
+            #newlosses = reward_giver.return_loss()
             d_losses.append(newlosses)
         logger.log(fmt_row(13, np.mean(d_losses, axis=0)))
 
@@ -352,6 +352,7 @@ def learn(env, policy_func, reward_giver, expert_dataset, rank,
         logger.record_tabular("EpLenMean", np.mean(lenbuffer))
         logger.record_tabular("EpRewMean", np.mean(rewbuffer))
         logger.record_tabular("EpTrueRewMean", np.mean(true_rewbuffer))
+        true_reward = np.mean(true_rewbuffer)
         logger.record_tabular("EpThisIter", len(lens))
         episodes_so_far += len(lens)
         timesteps_so_far += sum(lens)
@@ -363,7 +364,9 @@ def learn(env, policy_func, reward_giver, expert_dataset, rank,
         logger.record_tabular("Time for G", tend_G - tstart_G)
         if rank == 0:
             logger.dump_tabular()
-
+    f = open("/home/huawei/Autonomous_Simulator/thesis/reference/w_gail/baselines/result_log.txt", "a")
+    f.write("lr_"+str(d_stepsize)+"_result_"+str(true_reward)+"\n")
+    f.close()
 
 def flatten_lists(listoflists):
     return [el for list_ in listoflists for el in list_]

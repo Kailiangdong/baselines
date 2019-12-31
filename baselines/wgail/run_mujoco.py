@@ -37,7 +37,7 @@ def argsparser():
     parser.add_argument('--traj_limitation', type=int, default=-1)
     # Optimization Configuration
     parser.add_argument('--g_step', help='number of steps to train policy in each epoch', type=int, default= 1)
-    parser.add_argument('--d_step', help='number of steps to train discriminator in each epoch', type=int, default=10)
+    parser.add_argument('--d_step', help='number of steps to train discriminator in each epoch', type=int, default=50)
     # Network Configuration (Using MLP Policy)
     parser.add_argument('--policy_hidden_size', type=int, default=100)
     parser.add_argument('--adversary_hidden_size', type=int, default=100)
@@ -104,6 +104,7 @@ def main(args):
               args.algo,
               args.g_step,
               args.d_step,
+              args.d_stepsize,
               args.policy_entcoeff,
               args.num_timesteps,
               args.save_per_iter,
@@ -128,7 +129,7 @@ def main(args):
 
 
 def train(env, seed, policy_fn, reward_giver, dataset, algo,
-          g_step, d_step, policy_entcoeff, num_timesteps, save_per_iter,
+          g_step, d_step, d_stepsize, policy_entcoeff, num_timesteps, save_per_iter,
           checkpoint_dir, log_dir, pretrained, BC_max_iter, task_name=None):
 
     pretrained_weight = None
@@ -157,7 +158,7 @@ def train(env, seed, policy_fn, reward_giver, dataset, algo,
                        timesteps_per_batch=1024,
                        max_kl=0.01, cg_iters=10, cg_damping=0.1,
                        gamma=0.995, lam=0.97,
-                       vf_iters=5, vf_stepsize=1e-3,
+                       vf_iters=5, vf_stepsize=1e-3,d_stepsize = d_stepsize,
                        task_name=task_name)
     else:
         raise NotImplementedError
@@ -245,4 +246,10 @@ def traj_1_generator(pi, env, horizon, stochastic):
 
 if __name__ == '__main__':
     args = argsparser()
-    main(args)
+    d_stepsizes = [1e-2, 3e-2, 5e-2, 7e-2, 9e-2, 
+                   1e-3, 3e-3, 5e-3, 7e-3, 9e-3, 
+                   1e-4, 3e-4, 5e-4, 7e-4, 9e-4, 
+                   1e-5, 3e-5, 5e-5, 7e-5, 9e-5]
+    for d_stepsize in d_stepsizes:
+        args.d_stepsize = d_stepsize
+        main(args)
