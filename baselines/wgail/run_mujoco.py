@@ -38,6 +38,8 @@ def argsparser():
     # Optimization Configuration
     parser.add_argument('--g_step', help='number of steps to train policy in each epoch', type=int, default= 1)
     parser.add_argument('--d_step', help='number of steps to train discriminator in each epoch', type=int, default=50)
+    parser.add_argument('--d_stepsize', help='d_stepsize', type=float, default=5e-4)
+
     # Network Configuration (Using MLP Policy)
     parser.add_argument('--policy_hidden_size', type=int, default=100)
     parser.add_argument('--adversary_hidden_size', type=int, default=100)
@@ -246,10 +248,4 @@ def traj_1_generator(pi, env, horizon, stochastic):
 
 if __name__ == '__main__':
     args = argsparser()
-    d_stepsizes = [1e-2, 3e-2, 5e-2, 7e-2, 9e-2, 
-                   1e-3, 3e-3, 5e-3, 7e-3, 9e-3, 
-                   1e-4, 3e-4, 5e-4, 7e-4, 9e-4, 
-                   1e-5, 3e-5, 5e-5, 7e-5, 9e-5]
-    for d_stepsize in d_stepsizes:
-        args.d_stepsize = d_stepsize
-        main(args)
+    main(args)
