@@ -365,7 +365,7 @@ def learn(env, policy_func, reward_giver, expert_dataset, rank,
         if rank == 0:
             logger.dump_tabular()
     f = open("/home/huawei/Autonomous_Simulator/thesis/reference/w_gail/baselines/result_log.txt", "a")
-    f.write("lr_"+str(d_stepsize)+"_result_"+str(true_reward)+"\n")
+    f.write("d_stepsize_"+str(d_stepsize)+"_vf_stepsize_"+str(vf_stepsize)+"_result_"+str(true_reward)+"\n")
     f.close()
 
 def flatten_lists(listoflists):

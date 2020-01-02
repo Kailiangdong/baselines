@@ -39,7 +39,7 @@ def argsparser():
     parser.add_argument('--g_step', help='number of steps to train policy in each epoch', type=int, default= 1)
     parser.add_argument('--d_step', help='number of steps to train discriminator in each epoch', type=int, default=50)
     parser.add_argument('--d_stepsize', help='d_stepsize', type=float, default=5e-4)
-
+    parser.add_argument('--v_stepsize', help='v_stepsize', type=float, default=3e-4)
     # Network Configuration (Using MLP Policy)
     parser.add_argument('--policy_hidden_size', type=int, default=100)
     parser.add_argument('--adversary_hidden_size', type=int, default=100)
@@ -50,7 +50,7 @@ def argsparser():
     parser.add_argument('--adversary_entcoeff', help='entropy coefficiency of discriminator', type=float, default=1e-3)
     # Traing Configuration
     parser.add_argument('--save_per_iter', help='save model every xx iterations', type=int, default=100)
-    parser.add_argument('--num_timesteps', help='number of timesteps per episode', type=int, default=1e5)
+    parser.add_argument('--num_timesteps', help='number of timesteps per episode', type=int, default=5e6)
     # Behavior Cloning
     boolean_flag(parser, 'pretrained', default=False, help='Use BC to pretrain')
     parser.add_argument('--BC_max_iter', help='Max iteration for training BC', type=int, default=1e4)
@@ -107,6 +107,7 @@ def main(args):
               args.g_step,
               args.d_step,
               args.d_stepsize,
+              args.v_stepsize,
               args.policy_entcoeff,
               args.num_timesteps,
               args.save_per_iter,
@@ -131,7 +132,7 @@ def main(args):
 
 
 def train(env, seed, policy_fn, reward_giver, dataset, algo,
-          g_step, d_step, d_stepsize, policy_entcoeff, num_timesteps, save_per_iter,
+          g_step, d_step, d_stepsize, v_stepsize, policy_entcoeff, num_timesteps, save_per_iter,
           checkpoint_dir, log_dir, pretrained, BC_max_iter, task_name=None):
 
     pretrained_weight = None

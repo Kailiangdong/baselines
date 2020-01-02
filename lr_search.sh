@@ -1,5 +1,7 @@
-arr=("1e-2" "3e-2" "5e-2" "7e-2" "9e-2" "1e-3" "3e-3" "5e-3" "7e-3" "9e-3" "1e-4" "3e-4" "5e-4" "7e-4" "9e-4" "1e-5" "3e-5" "5e-5" "7e-5" "9e-5")
-for value in ${arr[@]}
+d_stepsizes=("3.2e-2" "3.4e-2" "3.6e-2" "3.8e-2" "4e-2" "4.2e-2" "5.2e-3" "5.4e-3" "5.6e-3" "5.8e-3" "6e-3" "6.2e-3")
+vf_stepsizes = ("4e-2" "3e-4" "6e-3" "4e-1" "4e-5")
+for d_stepsize in ${d_stepsizes[@]}
+  for vf_stepsize in ${vf_stepsizes[@]}
 do
-  mpirun -np 16 python -m baselines.wgail.run_mujoco --d_stepsize d_stepsize $value
+  mpirun -np 16 python -m baselines.wgail.run_mujoco --d_stepsize $d_stepsize --vf_stepsize $vf_stepsize
 done
