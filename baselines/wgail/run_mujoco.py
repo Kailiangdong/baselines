@@ -39,7 +39,7 @@ def argsparser():
     parser.add_argument('--g_step', help='number of steps to train policy in each epoch', type=int, default= 1)
     parser.add_argument('--d_step', help='number of steps to train discriminator in each epoch', type=int, default=50)
     parser.add_argument('--d_stepsize', help='d_stepsize', type=float, default=5e-4)
-    parser.add_argument('--v_stepsize', help='v_stepsize', type=float, default=3e-4)
+    parser.add_argument('--vf_stepsize', help='vf_stepsize', type=float, default=3e-4)
     # Network Configuration (Using MLP Policy)
     parser.add_argument('--policy_hidden_size', type=int, default=100)
     parser.add_argument('--adversary_hidden_size', type=int, default=100)
@@ -107,7 +107,7 @@ def main(args):
               args.g_step,
               args.d_step,
               args.d_stepsize,
-              args.v_stepsize,
+              args.vf_stepsize,
               args.policy_entcoeff,
               args.num_timesteps,
               args.save_per_iter,
@@ -132,7 +132,7 @@ def main(args):
 
 
 def train(env, seed, policy_fn, reward_giver, dataset, algo,
-          g_step, d_step, d_stepsize, v_stepsize, policy_entcoeff, num_timesteps, save_per_iter,
+          g_step, d_step, d_stepsize, vf_stepsize, policy_entcoeff, num_timesteps, save_per_iter,
           checkpoint_dir, log_dir, pretrained, BC_max_iter, task_name=None):
 
     pretrained_weight = None
@@ -161,7 +161,7 @@ def train(env, seed, policy_fn, reward_giver, dataset, algo,
                        timesteps_per_batch=1024,
                        max_kl=0.01, cg_iters=10, cg_damping=0.1,
                        gamma=0.995, lam=0.97,
-                       vf_iters=5, vf_stepsize=1e-3,d_stepsize = d_stepsize,
+                       vf_iters=5, vf_stepsize=vf_stepsize,d_stepsize = d_stepsize,
                        task_name=task_name)
     else:
         raise NotImplementedError
