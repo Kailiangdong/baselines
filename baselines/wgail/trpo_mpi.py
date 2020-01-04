@@ -110,6 +110,7 @@ def learn(env, policy_func, reward_giver, expert_dataset, rank,
           gamma, lam,
           max_kl, cg_iters, cg_damping=1e-2,
           vf_stepsize=3e-4, d_stepsize=3e-4, vf_iters=3,
+          adversary_entcoeff = 1e-3,clip_value = 1e-1,
           max_timesteps=0, max_episodes=0, max_iters=0,
           callback=None
           ):
@@ -365,7 +366,7 @@ def learn(env, policy_func, reward_giver, expert_dataset, rank,
         if rank == 0:
             logger.dump_tabular()
     f = open("/home/huawei/Autonomous_Simulator/thesis/reference/w_gail/baselines/result_log.txt", "a")
-    f.write("d_stepsize_"+str(d_stepsize)+"_vf_stepsize_"+str(vf_stepsize)+"_result_"+str(true_reward)+"\n")
+    f.write("d_stepsize_"+str(d_stepsize)+"_d_step_"+str(d_step)+"_result_"+str(true_reward)+"\n")
     f.close()
 
 def flatten_lists(listoflists):

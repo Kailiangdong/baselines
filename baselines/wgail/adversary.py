@@ -18,7 +18,7 @@ def logit_bernoulli_entropy(logits):
     return ent
 
 class TransitionClassifier(object):
-    def __init__(self, env, hidden_size, entcoeff=0.001, lr_rate=1e-3, scope="adversary"):
+    def __init__(self, env, hidden_size, entcoeff=0.001, clip_value = 1, lr_rate=1e-3, scope="adversary"):
         self.scope = scope
         self.observation_shape = env.observation_space.shape
         self.actions_shape = env.action_space.shape
@@ -65,7 +65,7 @@ class TransitionClassifier(object):
         #self.clip_op = [tf.assign(p, tf.clip_by_value(p, -0.01, 0.01)) for p in var_list]
 
         #self.update_op = tf.train.RMSPropOptimizer(3e-4).minimize(self.total_loss,var_list=var_list)
-        self.clip_D = [p.assign(tf.clip_by_value(p, -1, 1)) for p in var_list]
+        self.clip_D = [p.assign(tf.clip_by_value(p, -clip_value, clip_value)) for p in var_list]
 
 
     def build_ph(self):

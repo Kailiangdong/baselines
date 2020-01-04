@@ -1,11 +1,11 @@
-d_stepsizes=("3.2e-2" "3.4e-2" "3.6e-2" "3.8e-2" "4e-2" "4.2e-2" "5.2e-3" "5.4e-3" "5.6e-3" "5.8e-3" "6e-3" "6.2e-3")
-vf_stepsizes=("4e-2" "3e-4" "6e-3" "4e-1" "4e-5")
+d_stepsizes=("3.34e-2" "3.36e-2" "3.38e-2" "3.4e-2" "3.42e-2" "3.44e-2" "3.46e-2")
+d_steps=("10" "20" "40" "60" "80" "100")
 for d_stepsize in ${d_stepsizes[@]}
 do
 
-    for vf_stepsize in ${vf_stepsizes[@]}
+    for d_step in ${d_steps[@]}
     do
-          mpirun -np 16 python -m baselines.wgail.run_mujoco --d_stepsize $d_stepsize --vf_stepsize $vf_stepsize
+          mpirun -np 16 python -m baselines.wgail.run_mujoco --d_stepsize $d_stepsize --d_step $d_step
     done
 
 done
