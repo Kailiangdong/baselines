@@ -110,7 +110,7 @@ def learn(env, policy_func, reward_giver, expert_dataset, rank,
           gamma, lam,
           max_kl, cg_iters, cg_damping=1e-2,
           vf_stepsize=3e-4, d_stepsize=3e-4, vf_iters=3,
-          adversary_entcoeff = 1e-3,clip_value = 1e-1,
+          adversary_entcoeff = 1e-3,clip_value = 1e-1, gradient_penalty = 1e1,
           max_timesteps=0, max_episodes=0, max_iters=0,
           callback=None
           ):
@@ -120,6 +120,8 @@ def learn(env, policy_func, reward_giver, expert_dataset, rank,
     np.set_printoptions(precision=3)
     # Setup losses and stuff
     # ----------------------------------------
+    logger.log("------------")
+    logger.log(gradient_penalty)
     ob_space = env.observation_space
     ac_space = env.action_space
     pi = policy_func("pi", ob_space, ac_space, reuse=(pretrained_weight != None))
@@ -152,7 +154,7 @@ def learn(env, policy_func, reward_giver, expert_dataset, rank,
     vf_var_list = [v for v in all_var_list if v.name.startswith("pi/vff")]
     assert len(var_list) == len(vf_var_list) + 1
     # 这里只改名字
-    d_adam = MpiRMSProp(reward_giver.get_trainable_variables())
+    d_adam = MpiAdam(reward_giver.get_trainable_variables())
     vfadam = MpiAdam(vf_var_list)
 
     get_flat = U.GetFlat(var_list)
@@ -232,6 +234,9 @@ def learn(env, policy_func, reward_giver, expert_dataset, rank,
         elif max_iters and iters_so_far >= max_iters:
             break
 
+        frac = 1.0 - (timesteps_so_far - 1.0) / max_timesteps
+        vf_stepsize_now = frac * vf_stepsize
+        d_stepsize_now= frac * d_stepsize
         # Save model
         if rank == 0 and iters_so_far % save_per_iter == 0 and ckpt_dir is not None:
             fname = os.path.join(ckpt_dir, task_name)
@@ -308,7 +313,7 @@ def learn(env, policy_func, reward_giver, expert_dataset, rank,
                         if hasattr(pi, "ob_rms"):
                             pi.ob_rms.update(mbob)  # update running mean/std for policy
                         g = allmean(compute_vflossandgrad(mbob, mbret))
-                        vfadam.update(g, vf_stepsize)
+                        vfadam.update(g, vf_stepsize_now)
 
         g_losses = meanlosses
         for (lossname, lossval) in zip(loss_names, meanlosses):
@@ -327,11 +332,12 @@ def learn(env, policy_func, reward_giver, expert_dataset, rank,
             ob_expert, ac_expert = expert_dataset.get_next_batch(len(ob_batch))
             # update running mean/std for reward_giver
             if hasattr(reward_giver, "obs_rms"): reward_giver.obs_rms.update(np.concatenate((ob_batch, ob_expert), 0))
-            # 获得梯度
-            *newlosses, g = reward_giver.lossandgrad(ob_batch, ac_batch, ob_expert, ac_expert)
+            # 获得梯度'
+            eps = np.random.uniform(0, 1, len(ob_expert)).reshape(-1, 1)
+            *newlosses, g = reward_giver.lossandgrad(ob_batch, ac_batch, ob_expert, ac_expert, eps)
             # 梯度下降
-            d_adam.update(allmean(g), d_stepsize)
-            reward_giver.clip()
+            d_adam.update(allmean(g), d_stepsize_now)
+            #reward_giver.clip()
             #reward_giver.train(ob_batch, ac_batch, ob_expert, ac_expert)
             #newlosses = reward_giver.return_loss()
             d_losses.append(newlosses)
@@ -365,8 +371,8 @@ def learn(env, policy_func, reward_giver, expert_dataset, rank,
         logger.record_tabular("Time for G", tend_G - tstart_G)
         if rank == 0:
             logger.dump_tabular()
-    f = open("/home/huawei/Autonomous_Simulator/thesis/reference/w_gail/baselines/result_log.txt", "a")
-    f.write("d_stepsize_"+str(d_stepsize)+"_d_step_"+str(d_step)+"_adversary_entcoeff_"+str(adversary_entcoeff)+"_clip_value_"+str(clip_value)+"_result_"+str(true_reward)+"\n")
+    f = open("/home/huawei/Autonomous_Simulator/thesis/reference/w_gail/baselines/result_log_gp2.txt", "a")
+    f.write("d_stepsize_"+str(d_stepsize)+"_vf_stepsize_"+str(vf_stepsize)+"_gradient_penalty_"+str(gradient_penalty)+"_adversary_entcoeff_"+str(adversary_entcoeff)+"_result_"+str(true_reward)+"\n")
     f.close()
 
 def flatten_lists(listoflists):

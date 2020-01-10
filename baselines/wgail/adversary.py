@@ -18,7 +18,7 @@ def logit_bernoulli_entropy(logits):
     return ent
 
 class TransitionClassifier(object):
-    def __init__(self, env, hidden_size, entcoeff=0.001, clip_value = 1, lr_rate=1e-3, scope="adversary"):
+    def __init__(self, env, hidden_size, entcoeff=0.001, clip_value = 1, gradient_penalty = 10.0,lr_rate=1e-3, scope="adversary"):
         self.scope = scope
         self.observation_shape = env.observation_space.shape
         self.actions_shape = env.action_space.shape
@@ -40,6 +40,15 @@ class TransitionClassifier(object):
         #expert_loss = tf.nn.sigmoid_cross_entropy_with_logits(logits=expert_logits, labels=tf.ones_like(expert_logits))
         #expert_loss = tf.reduce_mean(expert_loss)
 
+        # gradient penalty
+        # eps = np.random.uniform(0, 1, len(self.expert_obs_ph)).reshape(-1, 1)     
+        xhat = self.eps * self.expert_obs_ph + (1 - self.eps) * self.generator_obs_ph
+        ahat = self.eps * self.expert_acs_ph + (1 - self.eps) * self.generator_acs_ph
+        xhat_gradients, ahat_gradients = tf.gradients(self.build_graph(xhat, ahat, reuse=True), [xhat, ahat])
+        hat_gradients = tf.concat([xhat_gradients, ahat_gradients], axis=1)
+        slopes = tf.sqrt(tf.reduce_sum(hat_gradients ** 2, reduction_indices=[1]) + 1e-8)
+        gp_loss = gradient_penalty * tf.reduce_mean((slopes - 1.) ** 2)
+
         # loss of wgail
         generator_loss = - tf.reduce_mean(generator_logits)
         expert_loss = tf.reduce_mean(expert_logits)
@@ -51,21 +60,21 @@ class TransitionClassifier(object):
         self.losses = [generator_loss, expert_loss, entropy, entropy_loss, generator_acc, expert_acc]
         self.loss_name = ["generator_loss", "expert_loss", "entropy", "entropy_loss", "generator_acc", "expert_acc"]
         #self.total_loss = generator_loss + expert_loss + entropy_loss
-        self.total_loss =  expert_loss + generator_loss + entropy_loss
+        self.total_loss =  expert_loss + generator_loss + entropy_loss + gp_loss
         # Build Reward for policy
         #self.reward_op = -tf.log(1-tf.nn.sigmoid(generator_logits)+1e-8)
         # reward for gail
         self.reward_op = generator_logits
         var_list = self.get_trainable_variables()
         # var_list = [p.assign(tf.clip_by_value(p, -0.01, 0.01)) for p in var_list]
-        self.lossandgrad = U.function([self.generator_obs_ph, self.generator_acs_ph, self.expert_obs_ph, self.expert_acs_ph],
+        self.lossandgrad = U.function([self.generator_obs_ph, self.generator_acs_ph, self.expert_obs_ph, self.expert_acs_ph, self.eps],
                                        self.losses + [U.flatgrad(self.total_loss, var_list)])
 
         #self.train_op = tf.train.RMSPropOptimizer(3e-4).minimize(self.total_loss, var_list=var_list)
         #self.clip_op = [tf.assign(p, tf.clip_by_value(p, -0.01, 0.01)) for p in var_list]
 
         #self.update_op = tf.train.RMSPropOptimizer(3e-4).minimize(self.total_loss,var_list=var_list)
-        self.clip_D = [p.assign(tf.clip_by_value(p, -clip_value, clip_value)) for p in var_list]
+        #self.clip_D = [p.assign(tf.clip_by_value(p, -clip_value, clip_value)) for p in var_list]
 
 
     def build_ph(self):
@@ -73,7 +82,7 @@ class TransitionClassifier(object):
         self.generator_acs_ph = tf.placeholder(tf.float32, (None, ) + self.actions_shape, name="actions_ph")
         self.expert_obs_ph = tf.placeholder(tf.float32, (None, ) + self.observation_shape, name="expert_observations_ph")
         self.expert_acs_ph = tf.placeholder(tf.float32, (None, ) + self.actions_shape, name="expert_actions_ph")
-
+        self.eps  = tf.placeholder(tf.float32, shape=(None, 1), name='eps')
     def build_graph(self, obs_ph, acs_ph, reuse=False):
         with tf.variable_scope(self.scope):
             if reuse:
@@ -91,9 +100,9 @@ class TransitionClassifier(object):
     def get_trainable_variables(self):
         return tf.get_collection(tf.GraphKeys.TRAINABLE_VARIABLES, self.scope)
 
-    def clip(self):
-        sess = tf.get_default_session()
-        sess.run(self.clip_D)
+    # def clip(self):
+    #     sess = tf.get_default_session()
+    #     sess.run(self.clip_D)
 
     # def train(self, obs, acs, ob_expert, ac_expert):
     #     sess = tf.get_default_session()

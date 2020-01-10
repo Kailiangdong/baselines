@@ -1,19 +1,19 @@
 trap "exit" INT
-d_stepsizes=("3.4e-2" "3.42e-2" "3.44e-2" "3.46e-2")
-d_steps=("20" "40" "60" "80" "100")
-clip_values=("1e0" "5e-1" "2e-1" "1e-1" "5e-2" "2e-2" "1e-2")
-adversary_entcoeffs=("1e-2" "1e-3" "3e-4" "1e-4")
+d_stepsizes=("1e-2" "1e-3" "1e-4")
+vf_stepsizes=("1e-2" "1e-3" "1e-4" "1e-5")
+gradient_penaltys=("1e1" "1e0" "1e-1" "1e-2")
+adversary_entcoeffs=("1e-2" "1e-3" "1e-4")
 for d_stepsize in ${d_stepsizes[@]}
 do
 
-    for d_step in ${d_steps[@]}
+    for gradient_penalty in ${gradient_penaltys[@]}
     do
 
-        for clip_value in ${clip_values[@]}
+        for vf_stepsize in ${vf_stepsizes[@]}
         do
             for adversary_entcoeff in ${adversary_entcoeffs[@]}
             do
-                mpirun -np 16 python -m baselines.wgail.run_mujoco --d_stepsize $d_stepsize --d_step $d_step --adversary_entcoeff $adversary_entcoeff --clip_value $clip_value
+                mpirun -np 16 python -m baselines.wgail.run_mujoco --d_stepsize $d_stepsize --gradient_penalty $gradient_penalty --adversary_entcoeff $adversary_entcoeff --clip_value $clip_value
             done
         done
 

@@ -49,7 +49,7 @@ def argsparser():
     parser.add_argument('--policy_entcoeff', help='entropy coefficiency of policy', type=float, default=0)
     parser.add_argument('--adversary_entcoeff', help='entropy coefficiency of discriminator', type=float, default=1e-3)
     parser.add_argument('--clip_value', help='clip_value', type=float, default=2e-2)
-    
+    parser.add_argument('--gradient_penalty', help='gradient_penalty', type=float, default=1e1)
     # Traing Configuration
     parser.add_argument('--save_per_iter', help='save model every xx iterations', type=int, default=100)
     parser.add_argument('--num_timesteps', help='number of timesteps per episode', type=int, default=5e6)
@@ -99,7 +99,7 @@ def main(args):
 
     if args.task == 'train':
         dataset = Mujoco_Dset(expert_path=args.expert_path, traj_limitation=args.traj_limitation)
-        reward_giver = TransitionClassifier(env, args.adversary_hidden_size, entcoeff=args.adversary_entcoeff,clip_value = args.clip_value)
+        reward_giver = TransitionClassifier(env, args.adversary_hidden_size, entcoeff=args.adversary_entcoeff,clip_value = args.clip_value,gradient_penalty = args.gradient_penalty)
         train(env,
               args.seed,
               policy_fn,
@@ -111,6 +111,7 @@ def main(args):
               args.d_stepsize,
               args.vf_stepsize,
               args.adversary_entcoeff,
+              args.gradient_penalty,
               args.clip_value,
               args.policy_entcoeff,
               args.num_timesteps,
@@ -136,7 +137,7 @@ def main(args):
 
 
 def train(env, seed, policy_fn, reward_giver, dataset, algo,
-          g_step, d_step, d_stepsize, vf_stepsize, adversary_entcoeff, clip_value,policy_entcoeff, num_timesteps, save_per_iter,
+          g_step, d_step, d_stepsize, vf_stepsize, adversary_entcoeff, clip_value,policy_entcoeff, gradient_penalty, num_timesteps, save_per_iter,
           checkpoint_dir, log_dir, pretrained, BC_max_iter, task_name=None):
 
     pretrained_weight = None
@@ -166,7 +167,7 @@ def train(env, seed, policy_fn, reward_giver, dataset, algo,
                        max_kl=0.01, cg_iters=10, cg_damping=0.1,
                        gamma=0.995, lam=0.97,
                        vf_iters=5, vf_stepsize=vf_stepsize,d_stepsize = d_stepsize,
-                       adversary_entcoeff = adversary_entcoeff,clip_value = clip_value,
+                       adversary_entcoeff = adversary_entcoeff,clip_value = clip_value, gradient_penalty = gradient_penalty,
                        task_name=task_name)
     else:
         raise NotImplementedError
