@@ -137,7 +137,7 @@ def main(args):
 
 
 def train(env, seed, policy_fn, reward_giver, dataset, algo,
-          g_step, d_step, d_stepsize, vf_stepsize, adversary_entcoeff, clip_value,policy_entcoeff, gradient_penalty, num_timesteps, save_per_iter,
+          g_step, d_step, d_stepsize, vf_stepsize, adversary_entcoeff, gradient_penalty, clip_value,policy_entcoeff, num_timesteps, save_per_iter,
           checkpoint_dir, log_dir, pretrained, BC_max_iter, task_name=None):
 
     pretrained_weight = None
@@ -156,6 +156,8 @@ def train(env, seed, policy_fn, reward_giver, dataset, algo,
         workerseed = seed + 10000 * MPI.COMM_WORLD.Get_rank()
         set_global_seeds(workerseed)
         env.seed(workerseed)
+        print("..........")
+        print("gradient_penalty")
         trpo_mpi.learn(env, policy_fn, reward_giver, dataset, rank,
                        pretrained=pretrained, pretrained_weight=pretrained_weight,
                        g_step=g_step, d_step=d_step,
@@ -167,7 +169,7 @@ def train(env, seed, policy_fn, reward_giver, dataset, algo,
                        max_kl=0.01, cg_iters=10, cg_damping=0.1,
                        gamma=0.995, lam=0.97,
                        vf_iters=5, vf_stepsize=vf_stepsize,d_stepsize = d_stepsize,
-                       adversary_entcoeff = adversary_entcoeff,clip_value = clip_value, gradient_penalty = gradient_penalty,
+                       adversary_entcoeff = adversary_entcoeff, gradient_penalty = gradient_penalty, clip_value = clip_value, 
                        task_name=task_name)
     else:
         raise NotImplementedError

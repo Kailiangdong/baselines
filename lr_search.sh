@@ -13,7 +13,7 @@ do
         do
             for adversary_entcoeff in ${adversary_entcoeffs[@]}
             do
-                mpirun -np 16 python -m baselines.wgail.run_mujoco --d_stepsize $d_stepsize --gradient_penalty $gradient_penalty --adversary_entcoeff $adversary_entcoeff --clip_value $clip_value
+                mpirun -np 16 python -m baselines.wgail.run_mujoco --d_stepsize $d_stepsize --gradient_penalty $gradient_penalty --adversary_entcoeff $adversary_entcoeff --vf_stepsize $vf_stepsize
             done
         done
 

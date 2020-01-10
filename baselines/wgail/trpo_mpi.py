@@ -371,7 +371,7 @@ def learn(env, policy_func, reward_giver, expert_dataset, rank,
         logger.record_tabular("Time for G", tend_G - tstart_G)
         if rank == 0:
             logger.dump_tabular()
-    f = open("/home/huawei/Autonomous_Simulator/thesis/reference/w_gail/baselines/result_log_gp2.txt", "a")
+    f = open("/home/huawei/Autonomous_Simulator/thesis/reference/w_gail/baselines/result_log_gp3.txt", "a")
     f.write("d_stepsize_"+str(d_stepsize)+"_vf_stepsize_"+str(vf_stepsize)+"_gradient_penalty_"+str(gradient_penalty)+"_adversary_entcoeff_"+str(adversary_entcoeff)+"_result_"+str(true_reward)+"\n")
     f.close()
 
